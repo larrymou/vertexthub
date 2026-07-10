@@ -1,7 +1,18 @@
 // apps/web/src/App.tsx
 // VertexHub Dashboard - 主页面
 
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+
+interface WeeklyReport {
+  id: string
+  content: {
+    summary: string
+    highlights: string[]
+    risks: string[]
+    metrics: Record<string, number>
+  }
+  delivered_at: string
+}
 
 interface Insight {
   id: string
@@ -13,6 +24,7 @@ interface Insight {
     message?: string
   }
   created_at: string
+  delivered_at?: string
 }
 
 interface Entity {
@@ -20,19 +32,19 @@ interface Entity {
   type: string
   status: string
   updated_at: string
+  attributes?: Record<string, any>
 }
 
 export function App() {
+  const [weeklyReport, setWeeklyReport] = useState<WeeklyReport | null>(null)
   const [insights, setInsights] = useState<Insight[]>([])
   const [entities, setEntities] = useState<Entity[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'insights' | 'entities'>('insights')
+  const [generating, setGenerating] = useState(false)
+  const [activeTab, setActiveTab] = useState<'report' | 'insights' | 'entities'>('report')
 
-  useEffect(() => {
-    loadData()
-  }, [])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
+    setLoading(true)
     try {
       const [insightsRes, entitiesRes] = await Promise.all([
         fetch('/api/insights'),
@@ -41,7 +53,18 @@ export function App() {
 
       if (insightsRes.ok) {
         const data = await insightsRes.json()
-        setInsights(data.insights || [])
+        const allInsights = data.insights || []
+        setInsights(allInsights)
+
+        // Find the latest weekly report
+        const weekly = allInsights.find((i: Insight) => i.type === 'weekly')
+        if (weekly) {
+          setWeeklyReport({
+            id: weekly.id,
+            content: weekly.content,
+            delivered_at: weekly.created_at || weekly.delivered_at,
+          })
+        }
       }
 
       if (entitiesRes.ok) {
@@ -52,6 +75,29 @@ export function App() {
       console.error('Failed to load data:', err)
     } finally {
       setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  const handleRefresh = async () => {
+    setGenerating(true)
+    try {
+      const res = await fetch('/api/insights/weekly', { method: 'POST' })
+      if (res.ok) {
+        const data = await res.json()
+        setWeeklyReport({
+          id: data.insight.id,
+          content: data.insight.content,
+          delivered_at: data.insight.delivered_at,
+        })
+      }
+    } catch (err) {
+      console.error('Failed to generate report:', err)
+    } finally {
+      setGenerating(false)
     }
   }
 
@@ -66,32 +112,150 @@ export function App() {
   return (
     <div className="container">
       <header className="header">
-        <h1>⚡ VertexHub</h1>
+        <h1>VertexHub</h1>
         <p className="subtitle">Organizational Nervous System</p>
       </header>
 
       <nav className="tabs">
         <button
+          className={`tab ${activeTab === 'report' ? 'active' : ''}`}
+          onClick={() => setActiveTab('report')}
+        >
+          Weekly Report
+        </button>
+        <button
           className={`tab ${activeTab === 'insights' ? 'active' : ''}`}
           onClick={() => setActiveTab('insights')}
         >
-          📊 Insights
+          Insights ({insights.length})
         </button>
         <button
           className={`tab ${activeTab === 'entities' ? 'active' : ''}`}
           onClick={() => setActiveTab('entities')}
         >
-          📁 Entities
+          Entities ({entities.length})
         </button>
       </nav>
 
       <main className="content">
-        {activeTab === 'insights' ? (
-          <InsightsList insights={insights} />
-        ) : (
-          <EntitiesList entities={entities} />
+        {activeTab === 'report' && (
+          <WeeklyReportView
+            report={weeklyReport}
+            generating={generating}
+            onRefresh={handleRefresh}
+          />
         )}
+        {activeTab === 'insights' && <InsightsList insights={insights} />}
+        {activeTab === 'entities' && <EntitiesList entities={entities} />}
       </main>
+    </div>
+  )
+}
+
+function WeeklyReportView({
+  report,
+  generating,
+  onRefresh,
+}: {
+  report: WeeklyReport | null
+  generating: boolean
+  onRefresh: () => void
+}) {
+  if (!report) {
+    return (
+      <div className="empty">
+        <p>No weekly report yet.</p>
+        <button className="btn" onClick={onRefresh} disabled={generating}>
+          {generating ? 'Generating...' : 'Generate Report'}
+        </button>
+      </div>
+    )
+  }
+
+  const { content } = report
+
+  return (
+    <div className="weekly-report">
+      <div className="report-header">
+        <h2>Weekly Report</h2>
+        <button className="btn btn-refresh" onClick={onRefresh} disabled={generating}>
+          {generating ? 'Generating...' : 'Refresh'}
+        </button>
+      </div>
+
+      {/* Metrics Grid */}
+      <div className="metrics-grid">
+        {content.metrics.pr_merge_rate !== undefined && (
+          <div className="metric-card">
+            <span className="metric-value">{Math.round(content.metrics.pr_merge_rate * 100)}%</span>
+            <span className="metric-label">PR Merge Rate</span>
+          </div>
+        )}
+        {content.metrics.merged_prs !== undefined && (
+          <div className="metric-card">
+            <span className="metric-value">{content.metrics.merged_prs}/{content.metrics.total_prs}</span>
+            <span className="metric-label">PRs Merged</span>
+          </div>
+        )}
+        {content.metrics.total_commits !== undefined && (
+          <div className="metric-card">
+            <span className="metric-value">{content.metrics.total_commits}</span>
+            <span className="metric-label">Commits</span>
+          </div>
+        )}
+        {content.metrics.active_contributors !== undefined && (
+          <div className="metric-card">
+            <span className="metric-value">{content.metrics.active_contributors}</span>
+            <span className="metric-label">Contributors</span>
+          </div>
+        )}
+        {content.metrics.bugs_closed !== undefined && (
+          <div className="metric-card">
+            <span className="metric-value">{content.metrics.bugs_closed}</span>
+            <span className="metric-label">Bugs Fixed</span>
+          </div>
+        )}
+        {content.metrics.open_prs !== undefined && (
+          <div className="metric-card">
+            <span className="metric-value">{content.metrics.open_prs}</span>
+            <span className="metric-label">Open PRs</span>
+          </div>
+        )}
+      </div>
+
+      {/* Narrative Summary */}
+      <div className="section">
+        <h3>Summary</h3>
+        <p className="narrative">{content.summary}</p>
+      </div>
+
+      {/* Highlights */}
+      {content.highlights.length > 0 && (
+        <div className="section">
+          <h3>Highlights</h3>
+          <ul className="highlight-list">
+            {content.highlights.map((h, i) => (
+              <li key={i} className="highlight-item">{h}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Risks */}
+      {content.risks.length > 0 && (
+        <div className="section">
+          <h3>Risks</h3>
+          <ul className="risk-list">
+            {content.risks.map((r, i) => (
+              <li key={i} className="risk-item">{r}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="report-footer">
+        Generated: {new Date(report.delivered_at).toLocaleString()}
+      </div>
     </div>
   )
 }
@@ -107,7 +271,7 @@ function InsightsList({ insights }: { insights: Insight[] }) {
         <div key={insight.id} className={`card card-${insight.type}`}>
           <div className="card-header">
             <span className={`badge badge-${insight.type}`}>{insight.type}</span>
-            <span className="date">{new Date(insight.created_at).toLocaleDateString()}</span>
+            <span className="date">{new Date(insight.created_at || insight.delivered_at || Date.now()).toLocaleDateString()}</span>
           </div>
           <div className="card-body">
             {insight.content.summary && <p>{insight.content.summary}</p>}
@@ -128,7 +292,7 @@ function InsightsList({ insights }: { insights: Insight[] }) {
                   <li key={i}>
                     <span className="event-type">{event.type}</span>
                     {event.title}
-                    {event.author && <span className="author">by {event.author}</span>}
+                    {event.author && <span className="author"> by {event.author}</span>}
                   </li>
                 ))}
               </ul>
@@ -155,6 +319,15 @@ function EntitiesList({ entities }: { entities: Entity[] }) {
           </div>
           <div className="card-body">
             <p className="entity-id">{entity.id}</p>
+            {entity.attributes && (
+              <div className="entity-attributes">
+                {Object.entries(entity.attributes).map(([key, value]) => (
+                  <span key={key} className="attribute">
+                    {key}: {String(value)}
+                  </span>
+                ))}
+              </div>
+            )}
             <p className="updated">Updated: {new Date(entity.updated_at).toLocaleString()}</p>
           </div>
         </div>

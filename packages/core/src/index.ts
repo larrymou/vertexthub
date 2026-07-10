@@ -36,3 +36,9 @@ export { getLogger, type Logger, type LogLevel, type LogContext } from './logger
 
 // Config
 export { loadConfig, type AppConfig } from './config'
+
+// Weekly Report (rule-based, no AI dependency)
+export { generateWeeklyReport } from './ai/weekly-report'
+
+// Demo data seeding
+export { seedDemoData, generateDemoData } from './demo/seed-data'

@@ -5,6 +5,8 @@ import http from 'http'
 import Database from 'better-sqlite3'
 import { SqliteEventStore, SqliteEntityStore, SqliteInsightStore } from '@vertexhub/core'
 import { RuleEngine } from '@vertexhub/core/src/engine/rule-engine'
+import { generateWeeklyReport } from '@vertexhub/core/src/ai/weekly-report'
+import { seedDemoData } from '@vertexhub/core/src/demo/seed-data'
 import { loadConfig } from '@vertexhub/core/src/config'
 import { getLogger } from '@vertexhub/core/src/logger'
 import { NotFoundError, ValidationError } from '@vertexhub/core/src/errors'
@@ -29,6 +31,26 @@ const entityStore = new SqliteEntityStore(db)
 const insightStore = new SqliteInsightStore(db)
 const ruleEngine = new RuleEngine()
 const healthChecker = createHealthChecker(db, logger)
+
+// Seed demo data on first startup
+const seedResult = seedDemoData(db)
+if (seedResult.seeded) {
+  logger.info(`Seeded demo data: ${seedResult.events} events`)
+} else {
+  logger.info(`Demo data already exists: ${seedResult.events} events`)
+}
+
+// Auto-generate weekly report on startup
+;(async () => {
+  try {
+    const events = await eventStore.query({ limit: 1000 })
+    const weeklyReport = generateWeeklyReport(events)
+    await insightStore.save(weeklyReport)
+    logger.info('Weekly report generated', { id: weeklyReport.id })
+  } catch (err) {
+    logger.error('Failed to generate weekly report', { error: String(err) })
+  }
+})()
 
 // Create middleware
 const corsMiddleware = createCorsMiddleware({ origin: config.CORS_ORIGIN })
@@ -111,6 +133,16 @@ async function handleRequest(
   if (url.pathname === '/api/insights/daily' && req.method === 'POST') {
     const events = await eventStore.query({ limit: 1000 })
     const insight = ruleEngine.generateDailySummary(events)
+    await insightStore.save(insight)
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ insight }))
+    return
+  }
+
+  // Generate weekly report (rule-based, no AI)
+  if (url.pathname === '/api/insights/weekly' && req.method === 'POST') {
+    const events = await eventStore.query({ limit: 1000 })
+    const insight = generateWeeklyReport(events)
     await insightStore.save(insight)
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ insight }))
