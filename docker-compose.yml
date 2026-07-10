@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  vertexhub:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DATABASE_URL=file:/app/data/vertexhub.db
+      - PORT=3000
+      - NODE_ENV=production
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+
+volumes:
+  redis_data:
