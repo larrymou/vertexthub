@@ -1,7 +1,7 @@
 // apps/web/src/App.tsx
 // VertexHub Dashboard - 主页面
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Component, type ReactNode } from 'react'
 
 interface WeeklyReport {
   id: string
@@ -30,9 +30,45 @@ interface Insight {
 interface Entity {
   id: string
   type: string
-  status: string
-  updated_at: string
   attributes?: Record<string, any>
+  consistency: {
+    status: string
+    last_checked: string
+  }
+}
+
+interface ErrorBoundaryProps {
+  children: ReactNode
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean
+  error: Error | null
+}
+
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false, error: null }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="container">
+          <div className="error">
+            <h2>Something went wrong</h2>
+            <p>{this.state.error?.message || 'An unexpected error occurred.'}</p>
+            <button className="btn" onClick={() => this.setState({ hasError: false, error: null })}>
+              Retry
+            </button>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
 }
 
 export function App() {
@@ -105,6 +141,18 @@ export function App() {
     return (
       <div className="container">
         <div className="loading">Loading...</div>
+      </div>
+    )
+  }
+
+  if (window.location.pathname !== '/') {
+    return (
+      <div className="container">
+        <div className="not-found">
+          <h2>404 - Page Not Found</h2>
+          <p>The page you are looking for does not exist.</p>
+          <a href="/" className="btn">Back to Home</a>
+        </div>
       </div>
     )
   }
@@ -265,6 +313,18 @@ function InsightsList({ insights }: { insights: Insight[] }) {
     return <div className="empty">No insights yet. Connect a data source to get started.</div>
   }
 
+  const metricLabels: Record<string, string> = {
+    pr_merge_rate: 'PR Merge Rate',
+    total_prs: 'Total PRs',
+    merged_prs: 'Merged PRs',
+    open_prs: 'Open PRs',
+    total_issues: 'Total Issues',
+    bugs_opened: 'Bugs Opened',
+    bugs_closed: 'Bugs Closed',
+    total_commits: 'Total Commits',
+    active_contributors: 'Active Contributors',
+  }
+
   return (
     <div className="list">
       {insights.map(insight => (
@@ -281,7 +341,7 @@ function InsightsList({ insights }: { insights: Insight[] }) {
                 {Object.entries(insight.content.metrics).map(([key, value]) => (
                   <div key={key} className="metric">
                     <span className="metric-value">{value}</span>
-                    <span className="metric-label">{key}</span>
+                    <span className="metric-label">{metricLabels[key] || key}</span>
                   </div>
                 ))}
               </div>
@@ -315,7 +375,7 @@ function EntitiesList({ entities }: { entities: Entity[] }) {
         <div key={entity.id} className="card">
           <div className="card-header">
             <span className="entity-type">{entity.type}</span>
-            <span className={`status status-${entity.status}`}>{entity.status}</span>
+            <span className={`status status-${entity.consistency.status}`}>{entity.consistency.status}</span>
           </div>
           <div className="card-body">
             <p className="entity-id">{entity.id}</p>
@@ -328,7 +388,7 @@ function EntitiesList({ entities }: { entities: Entity[] }) {
                 ))}
               </div>
             )}
-            <p className="updated">Updated: {new Date(entity.updated_at).toLocaleString()}</p>
+            <p className="updated">Updated: {new Date(entity.consistency.last_checked).toLocaleString()}</p>
           </div>
         </div>
       ))}

@@ -190,7 +190,7 @@ function generateNarrativeSummary(prs: PRData[], issues: IssueData[], commits: C
   const parts: string[] = []
 
   // Opening
-  parts.push(`本周团队共提交 ${metrics.totalCommits} 个 commit，${metrics.activeContributors} 位成员参与贡献。`)
+  parts.push(`本周团队共提交 ${metrics.totalCommits} 个 commit，${metrics.activeContributors} 位成员参与贡献`)
 
   // PR narrative
   if (metrics.mergedPRs > 0) {
@@ -218,7 +218,8 @@ function generateNarrativeSummary(prs: PRData[], issues: IssueData[], commits: C
     parts.push(`Bug 动态：新增 ${metrics.bugsOpened} 个，关闭 ${metrics.bugsClosed} 个`)
   }
 
-  return parts.join('。') + '。'
+  const text = parts.join('。')
+  return text.endsWith('。') ? text : text + '。'
 }
 
 export function generateWeeklyReport(events: RawEvent[]): Insight {
