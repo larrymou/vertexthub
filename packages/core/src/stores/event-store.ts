@@ -27,6 +27,11 @@ export class SqliteEventStore implements EventStore {
       CREATE INDEX IF NOT EXISTS idx_events_connector ON raw_events(connector_id);
       CREATE INDEX IF NOT EXISTS idx_events_type ON raw_events(type);
       CREATE INDEX IF NOT EXISTS idx_events_timestamp ON raw_events(timestamp);
+
+      CREATE TABLE IF NOT EXISTS connector_sync_metadata (
+        connector_id TEXT PRIMARY KEY,
+        last_sync_time TEXT NOT NULL
+      );
     `)
   }
 
@@ -91,5 +96,21 @@ export class SqliteEventStore implements EventStore {
       timestamp: new Date(row.timestamp),
       ingested_at: new Date(row.ingested_at),
     }))
+  }
+
+  async getLastSyncTime(connectorId: string): Promise<Date | undefined> {
+    const row = this.db.prepare(
+      'SELECT last_sync_time FROM connector_sync_metadata WHERE connector_id = ?'
+    ).get(connectorId) as { last_sync_time: string } | undefined
+
+    if (!row) return undefined
+    return new Date(row.last_sync_time)
+  }
+
+  async updateLastSyncTime(connectorId: string): Promise<void> {
+    this.db.prepare(`
+      INSERT OR REPLACE INTO connector_sync_metadata (connector_id, last_sync_time)
+      VALUES (?, ?)
+    `).run(connectorId, new Date().toISOString())
   }
 }

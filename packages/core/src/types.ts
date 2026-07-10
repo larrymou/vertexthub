@@ -113,6 +113,8 @@ export interface EventFilter {
 export interface EventStore {
   append(event: RawEvent): Promise<void>
   query(filter: EventFilter): Promise<RawEvent[]>
+  getLastSyncTime(connectorId: string): Promise<Date | undefined>
+  updateLastSyncTime(connectorId: string): Promise<void>
 }
 
 export interface EntityStore {

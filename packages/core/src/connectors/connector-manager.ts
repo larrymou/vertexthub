@@ -162,12 +162,11 @@ export class ConnectorManager {
 
   // 获取上次同步时间
   private async getLastSyncTime(connectorId: string): Promise<Date | undefined> {
-    // TODO: 从数据库读取
-    return undefined
+    return this.eventStore.getLastSyncTime(connectorId)
   }
 
   // 更新上次同步时间
   private async updateLastSyncTime(connectorId: string): Promise<void> {
-    // TODO: 写入数据库
+    await this.eventStore.updateLastSyncTime(connectorId)
   }
 }

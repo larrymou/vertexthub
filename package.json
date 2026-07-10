@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "description": "Organizational Nervous System - Eliminate organizational blindness",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
