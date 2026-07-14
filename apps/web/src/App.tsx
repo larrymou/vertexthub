@@ -3,6 +3,8 @@
 
 import { useState, useEffect, useCallback, Component, type ReactNode } from 'react'
 
+const CURRENT_USER = import.meta.env.VITE_USER_ID || 'current-user'
+
 interface WeeklyReport {
   id: string
   content: {

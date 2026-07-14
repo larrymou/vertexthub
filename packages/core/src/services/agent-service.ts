@@ -20,6 +20,10 @@ export class AgentService {
       throw new ConflictError(`Agent ${agentId} is not active (status: ${agent.status})`)
     }
 
+    // TODO: This read-then-write has a TOCTOU race under concurrency.
+    // For true atomicity, wrap in BEGIN IMMEDIATE transaction (SQLite)
+    // or use a database-level CHECK constraint. Acceptable for MVP
+    // since better-sqlite3 transactions are synchronous and block the event loop.
     const activeTasks = await this.taskStore.list({ assignee_id: agentId })
     const activeCount = activeTasks.filter(
       t => t.status === 'in_progress' || t.status === 'assigned',
