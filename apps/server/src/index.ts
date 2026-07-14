@@ -3,7 +3,7 @@
 
 import http from 'http'
 import Database from 'better-sqlite3'
-import { SqliteEventStore, SqliteEntityStore, SqliteInsightStore, SqliteTaskStore, SqliteAgentStore, AgentService, TaskStateMachine, calculateContributionScore } from '@vertexhub/core'
+import { SqliteEventStore, SqliteEntityStore, SqliteInsightStore, SqliteTaskStore, SqliteAgentStore, SqliteSkillStore, MatchEngine, AgentService, TaskStateMachine, calculateContributionScore } from '@vertexhub/core'
 import { RuleEngine } from '@vertexhub/core/src/engine/rule-engine'
 import { generateWeeklyReport } from '@vertexhub/core/src/ai/weekly-report'
 import { seedDemoData } from '@vertexhub/core/src/demo/seed-data'
@@ -35,6 +35,8 @@ const taskStore = new SqliteTaskStore(db)
 const taskStateMachine = new TaskStateMachine()
 const agentStore = new SqliteAgentStore(db)
 const agentService = new AgentService(agentStore, taskStore, taskStateMachine)
+const skillStore = new SqliteSkillStore(db)
+const matchEngine = new MatchEngine()
 const ruleEngine = new RuleEngine()
 const healthChecker = createHealthChecker(db, logger)
 
@@ -159,6 +161,202 @@ async function handleRequest(
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ insight }))
     return
+  }
+
+  // Skill routes
+
+  // GET /api/skills/stats
+  if (url.pathname === '/api/skills/stats' && req.method === 'GET') {
+    const stats = await skillStore.stats()
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ stats }))
+    return
+  }
+
+  // GET /api/skills
+  if (url.pathname === '/api/skills' && req.method === 'GET') {
+    const params = validateQueryParams(url.searchParams, {
+      category: { type: 'string' },
+      parent_id: { type: 'string' },
+      search: { type: 'string' },
+      limit: { type: 'number' },
+    })
+    const skills = await skillStore.list({
+      category: params.category,
+      parent_id: params.parent_id,
+      search: params.search,
+      limit: params.limit,
+    })
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ skills }))
+    return
+  }
+
+  // GET /api/skills/:id
+  if (url.pathname.startsWith('/api/skills/') && req.method === 'GET') {
+    const id = url.pathname.split('/')[3]
+    if (!id) throw new ValidationError('Skill ID is required', 'id')
+    const skill = await skillStore.get(id)
+    if (!skill) throw new NotFoundError('Skill', id)
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ skill }))
+    return
+  }
+
+  // POST /api/skills
+  if (url.pathname === '/api/skills' && req.method === 'POST') {
+    const body = (req as any).body
+    if (!body.name) throw new ValidationError('name is required', 'name')
+    if (!body.display_name) throw new ValidationError('display_name is required', 'display_name')
+    if (!body.category) throw new ValidationError('category is required', 'category')
+    const skill = await skillStore.create({
+      name: body.name,
+      display_name: body.display_name,
+      category: body.category,
+      description: body.description || '',
+      parent_id: body.parent_id || null,
+    })
+    res.writeHead(201, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ skill }))
+    return
+  }
+
+  // PATCH /api/skills/:id
+  if (url.pathname.startsWith('/api/skills/') && req.method === 'PATCH') {
+    const id = url.pathname.split('/')[3]
+    if (!id) throw new ValidationError('Skill ID is required', 'id')
+    const body = (req as any).body
+    const skill = await skillStore.update(id, body)
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ skill }))
+    return
+  }
+
+  // DELETE /api/skills/:id
+  if (url.pathname.startsWith('/api/skills/') && req.method === 'DELETE') {
+    const id = url.pathname.split('/')[3]
+    if (!id) throw new ValidationError('Skill ID is required', 'id')
+    await skillStore.delete(id)
+    res.writeHead(204)
+    res.end()
+    return
+  }
+
+  // Agent skill routes
+
+  // GET /api/agents/:id/skills
+  if (url.pathname.startsWith('/api/agents/') && req.method === 'GET') {
+    const parts = url.pathname.split('/')
+    if (parts.length === 5 && parts[4] === 'skills') {
+      const id = parts[3]
+      if (!id) throw new ValidationError('Agent ID is required', 'id')
+      const skills = await skillStore.getAgentSkills(id)
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ skills }))
+      return
+    }
+  }
+
+  // POST /api/agents/:id/skills
+  if (url.pathname.startsWith('/api/agents/') && req.method === 'POST') {
+    const parts = url.pathname.split('/')
+    if (parts.length === 5 && parts[4] === 'skills') {
+      const id = parts[3]
+      if (!id) throw new ValidationError('Agent ID is required', 'id')
+      const body = (req as any).body
+      if (!body.skill_id) throw new ValidationError('skill_id is required', 'skill_id')
+      if (body.proficiency === undefined) throw new ValidationError('proficiency is required', 'proficiency')
+      const skill = await skillStore.addAgentSkill(id, body.skill_id, body.proficiency)
+      res.writeHead(201, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ skill }))
+      return
+    }
+  }
+
+  // DELETE /api/agents/:id/skills/:skillId
+  if (url.pathname.startsWith('/api/agents/') && req.method === 'DELETE') {
+    const parts = url.pathname.split('/')
+    if (parts.length === 6 && parts[4] === 'skills') {
+      const id = parts[3]
+      const skillId = parts[5]
+      if (!id) throw new ValidationError('Agent ID is required', 'id')
+      if (!skillId) throw new ValidationError('Skill ID is required', 'skillId')
+      await skillStore.removeAgentSkill(id, skillId)
+      res.writeHead(204)
+      res.end()
+      return
+    }
+  }
+
+  // Task skill routes
+
+  // GET /api/tasks/:id/skills
+  if (url.pathname.startsWith('/api/tasks/') && req.method === 'GET') {
+    const parts = url.pathname.split('/')
+    if (parts.length === 5 && parts[4] === 'skills') {
+      const id = parts[3]
+      if (!id) throw new ValidationError('Task ID is required', 'id')
+      const skills = await skillStore.getTaskSkills(id)
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ skills }))
+      return
+    }
+  }
+
+  // POST /api/tasks/:id/skills
+  if (url.pathname.startsWith('/api/tasks/') && req.method === 'POST') {
+    const parts = url.pathname.split('/')
+    if (parts.length === 5 && parts[4] === 'skills') {
+      const id = parts[3]
+      if (!id) throw new ValidationError('Task ID is required', 'id')
+      const body = (req as any).body
+      if (!body.skill_id) throw new ValidationError('skill_id is required', 'skill_id')
+      if (body.min_proficiency === undefined) throw new ValidationError('min_proficiency is required', 'min_proficiency')
+      const skill = await skillStore.addTaskSkill(id, body.skill_id, body.min_proficiency, body.required ?? false)
+      res.writeHead(201, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ skill }))
+      return
+    }
+  }
+
+  // DELETE /api/tasks/:id/skills/:skillId
+  if (url.pathname.startsWith('/api/tasks/') && req.method === 'DELETE') {
+    const parts = url.pathname.split('/')
+    if (parts.length === 6 && parts[4] === 'skills') {
+      const id = parts[3]
+      const skillId = parts[5]
+      if (!id) throw new ValidationError('Task ID is required', 'id')
+      if (!skillId) throw new ValidationError('Skill ID is required', 'skillId')
+      await skillStore.removeTaskSkill(id, skillId)
+      res.writeHead(204)
+      res.end()
+      return
+    }
+  }
+
+  // POST /api/tasks/:id/match
+  if (url.pathname.startsWith('/api/tasks/') && req.method === 'POST') {
+    const parts = url.pathname.split('/')
+    if (parts.length === 5 && parts[4] === 'match') {
+      const id = parts[3]
+      if (!id) throw new ValidationError('Task ID is required', 'id')
+      const taskSkills = await skillStore.getTaskSkills(id)
+      if (taskSkills.length === 0) {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ results: [] }))
+        return
+      }
+      const agents = await agentStore.list({ status: 'active' })
+      const agentSkillsMap = new Map()
+      for (const agent of agents) {
+        const skills = await skillStore.getAgentSkills(agent.id)
+        agentSkillsMap.set(agent.id, skills)
+      }
+      const results = matchEngine.matchAgents(taskSkills, agents, agentSkillsMap)
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ results }))
+      return
+    }
   }
 
   // Agent routes
