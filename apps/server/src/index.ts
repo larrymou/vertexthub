@@ -3,7 +3,7 @@
 
 import http from 'http'
 import Database from 'better-sqlite3'
-import { SqliteEventStore, SqliteEntityStore, SqliteInsightStore } from '@vertexhub/core'
+import { SqliteEventStore, SqliteEntityStore, SqliteInsightStore, SqliteTaskStore, TaskStateMachine, calculateContributionScore } from '@vertexhub/core'
 import { RuleEngine } from '@vertexhub/core/src/engine/rule-engine'
 import { generateWeeklyReport } from '@vertexhub/core/src/ai/weekly-report'
 import { seedDemoData } from '@vertexhub/core/src/demo/seed-data'
@@ -31,6 +31,8 @@ db.pragma('foreign_keys = ON')
 const eventStore = new SqliteEventStore(db)
 const entityStore = new SqliteEntityStore(db)
 const insightStore = new SqliteInsightStore(db)
+const taskStore = new SqliteTaskStore(db)
+const taskStateMachine = new TaskStateMachine()
 const ruleEngine = new RuleEngine()
 const healthChecker = createHealthChecker(db, logger)
 
@@ -154,6 +156,191 @@ async function handleRequest(
     await insightStore.save(insight)
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ insight }))
+    return
+  }
+
+  // Task routes
+
+  // GET /api/tasks/stats — must come before :id route
+  if (url.pathname === '/api/tasks/stats' && req.method === 'GET') {
+    const stats = await taskStore.stats()
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ stats }))
+    return
+  }
+
+  // GET /api/tasks — list tasks with optional filters
+  if (url.pathname === '/api/tasks' && req.method === 'GET') {
+    const params = validateQueryParams(url.searchParams, {
+      status: { type: 'string' },
+      assignee_id: { type: 'string' },
+      creator_id: { type: 'string' },
+      priority: { type: 'string' },
+      type: { type: 'string' },
+      limit: { type: 'number' },
+    })
+    const tasks = await taskStore.list({
+      status: params.status as any,
+      assignee_id: params.assignee_id,
+      creator_id: params.creator_id,
+      priority: params.priority as any,
+      type: params.type,
+      limit: params.limit,
+    })
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ tasks }))
+    return
+  }
+
+  // GET /api/tasks/:id
+  if (url.pathname.startsWith('/api/tasks/') && req.method === 'GET') {
+    const id = url.pathname.split('/')[3]
+    if (!id) throw new ValidationError('Task ID is required', 'id')
+    const task = await taskStore.get(id)
+    if (!task) throw new NotFoundError('Task', id)
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ task }))
+    return
+  }
+
+  // POST /api/tasks — create task
+  if (url.pathname === '/api/tasks' && req.method === 'POST') {
+    const body = (req as any).body
+    if (!body.title) throw new ValidationError('title is required', 'title')
+    if (!body.creator_id) throw new ValidationError('creator_id is required', 'creator_id')
+    const task = await taskStore.create({
+      title: body.title,
+      description: body.description || '',
+      status: 'open',
+      priority: body.priority || 'medium',
+      type: body.type || 'task',
+      creator_id: body.creator_id,
+      assignee_id: null,
+      started_at: null,
+      completed_at: null,
+      deadline: body.deadline ? new Date(body.deadline) : null,
+      entity_refs: body.entity_refs || [],
+      tags: body.tags || [],
+      deliverables: [],
+      contribution_score: null,
+      review_notes: null,
+    })
+    res.writeHead(201, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ task }))
+    return
+  }
+
+  // POST /api/tasks/claim
+  if (url.pathname === '/api/tasks/claim' && req.method === 'POST') {
+    const body = (req as any).body
+    if (!body.task_id) throw new ValidationError('task_id is required', 'task_id')
+    if (!body.user_id) throw new ValidationError('user_id is required', 'user_id')
+    const existing = await taskStore.get(body.task_id)
+    if (!existing) throw new NotFoundError('Task', body.task_id)
+    const updated = taskStateMachine.claim(existing, body.user_id)
+    const saved = await taskStore.update(body.task_id, updated)
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ task: saved }))
+    return
+  }
+
+  // POST /api/tasks/start
+  if (url.pathname === '/api/tasks/start' && req.method === 'POST') {
+    const body = (req as any).body
+    if (!body.task_id) throw new ValidationError('task_id is required', 'task_id')
+    if (!body.user_id) throw new ValidationError('user_id is required', 'user_id')
+    const existing = await taskStore.get(body.task_id)
+    if (!existing) throw new NotFoundError('Task', body.task_id)
+    const updated = taskStateMachine.start(existing, body.user_id)
+    const saved = await taskStore.update(body.task_id, updated)
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ task: saved }))
+    return
+  }
+
+  // POST /api/tasks/submit
+  if (url.pathname === '/api/tasks/submit' && req.method === 'POST') {
+    const body = (req as any).body
+    if (!body.task_id) throw new ValidationError('task_id is required', 'task_id')
+    if (!body.user_id) throw new ValidationError('user_id is required', 'user_id')
+    const existing = await taskStore.get(body.task_id)
+    if (!existing) throw new NotFoundError('Task', body.task_id)
+    const updated = taskStateMachine.submitForReview(existing, body.user_id)
+    const saved = await taskStore.update(body.task_id, updated)
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ task: saved }))
+    return
+  }
+
+  // POST /api/tasks/approve
+  if (url.pathname === '/api/tasks/approve' && req.method === 'POST') {
+    const body = (req as any).body
+    if (!body.task_id) throw new ValidationError('task_id is required', 'task_id')
+    if (!body.user_id) throw new ValidationError('user_id is required', 'user_id')
+    const existing = await taskStore.get(body.task_id)
+    if (!existing) throw new NotFoundError('Task', body.task_id)
+    let score = body.score
+    if (score === undefined || score === null) {
+      if (existing.started_at && existing.deadline) {
+        const calculated = calculateContributionScore({
+          started_at: existing.started_at,
+          completed_at: new Date(),
+          deadline: existing.deadline,
+          priority: existing.priority,
+          type: existing.type,
+        })
+        score = calculated ?? 50
+      } else {
+        score = 50
+      }
+    }
+    const updated = taskStateMachine.approve(existing, body.user_id, score, body.notes)
+    const saved = await taskStore.update(body.task_id, updated)
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ task: saved }))
+    return
+  }
+
+  // POST /api/tasks/reject
+  if (url.pathname === '/api/tasks/reject' && req.method === 'POST') {
+    const body = (req as any).body
+    if (!body.task_id) throw new ValidationError('task_id is required', 'task_id')
+    if (!body.user_id) throw new ValidationError('user_id is required', 'user_id')
+    if (!body.notes) throw new ValidationError('notes is required for rejection', 'notes')
+    const existing = await taskStore.get(body.task_id)
+    if (!existing) throw new NotFoundError('Task', body.task_id)
+    const updated = taskStateMachine.reject(existing, body.user_id, body.notes)
+    const saved = await taskStore.update(body.task_id, updated)
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ task: saved }))
+    return
+  }
+
+  // POST /api/tasks/resubmit
+  if (url.pathname === '/api/tasks/resubmit' && req.method === 'POST') {
+    const body = (req as any).body
+    if (!body.task_id) throw new ValidationError('task_id is required', 'task_id')
+    if (!body.user_id) throw new ValidationError('user_id is required', 'user_id')
+    const existing = await taskStore.get(body.task_id)
+    if (!existing) throw new NotFoundError('Task', body.task_id)
+    const updated = taskStateMachine.resubmit(existing, body.user_id)
+    const saved = await taskStore.update(body.task_id, updated)
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ task: saved }))
+    return
+  }
+
+  // POST /api/tasks/cancel
+  if (url.pathname === '/api/tasks/cancel' && req.method === 'POST') {
+    const body = (req as any).body
+    if (!body.task_id) throw new ValidationError('task_id is required', 'task_id')
+    if (!body.user_id) throw new ValidationError('user_id is required', 'user_id')
+    const existing = await taskStore.get(body.task_id)
+    if (!existing) throw new NotFoundError('Task', body.task_id)
+    const updated = taskStateMachine.cancel(existing, body.user_id)
+    const saved = await taskStore.update(body.task_id, updated)
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ task: saved }))
     return
   }
 
