@@ -3,7 +3,7 @@
 
 import http from 'http'
 import Database from 'better-sqlite3'
-import { SqliteEventStore, SqliteEntityStore, SqliteInsightStore, SqliteTaskStore, TaskStateMachine, calculateContributionScore } from '@vertexhub/core'
+import { SqliteEventStore, SqliteEntityStore, SqliteInsightStore, SqliteTaskStore, SqliteAgentStore, AgentService, TaskStateMachine, calculateContributionScore } from '@vertexhub/core'
 import { RuleEngine } from '@vertexhub/core/src/engine/rule-engine'
 import { generateWeeklyReport } from '@vertexhub/core/src/ai/weekly-report'
 import { seedDemoData } from '@vertexhub/core/src/demo/seed-data'
@@ -33,6 +33,8 @@ const entityStore = new SqliteEntityStore(db)
 const insightStore = new SqliteInsightStore(db)
 const taskStore = new SqliteTaskStore(db)
 const taskStateMachine = new TaskStateMachine()
+const agentStore = new SqliteAgentStore(db)
+const agentService = new AgentService(agentStore, taskStore, taskStateMachine)
 const ruleEngine = new RuleEngine()
 const healthChecker = createHealthChecker(db, logger)
 
@@ -156,6 +158,120 @@ async function handleRequest(
     await insightStore.save(insight)
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ insight }))
+    return
+  }
+
+  // Agent routes
+
+  // GET /api/agents/stats — must come before :id route
+  if (url.pathname === '/api/agents/stats' && req.method === 'GET') {
+    const stats = await agentStore.stats()
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ stats }))
+    return
+  }
+
+  // GET /api/agents — list agents with optional filters
+  if (url.pathname === '/api/agents' && req.method === 'GET') {
+    const params = validateQueryParams(url.searchParams, {
+      status: { type: 'string' },
+      type: { type: 'string' },
+      skill: { type: 'string' },
+      min_credit: { type: 'number' },
+      limit: { type: 'number' },
+    })
+    const agents = await agentStore.list({
+      status: params.status as any,
+      type: params.type as any,
+      skill: params.skill,
+      min_credit: params.min_credit,
+      limit: params.limit,
+    })
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ agents }))
+    return
+  }
+
+  // GET /api/agents/:id/tasks — must come before :id route
+  if (url.pathname.startsWith('/api/agents/') && req.method === 'GET') {
+    const parts = url.pathname.split('/')
+    if (parts.length === 5 && parts[4] === 'tasks') {
+      const id = parts[3]
+      if (!id) throw new ValidationError('Agent ID is required', 'id')
+      const tasks = await agentService.getAgentTasks(id)
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ tasks }))
+      return
+    }
+  }
+
+  // GET /api/agents/:id/credit — must come before :id route
+  if (url.pathname.startsWith('/api/agents/') && req.method === 'GET') {
+    const parts = url.pathname.split('/')
+    if (parts.length === 5 && parts[4] === 'credit') {
+      const id = parts[3]
+      if (!id) throw new ValidationError('Agent ID is required', 'id')
+      const agent = await agentStore.get(id)
+      if (!agent) throw new NotFoundError('Agent', id)
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ credit_history: agent.credit_history }))
+      return
+    }
+  }
+
+  // POST /api/agents/match — must come before :id route
+  if (url.pathname === '/api/agents/match' && req.method === 'POST') {
+    const body = (req as any).body
+    if (!body.skills || !Array.isArray(body.skills)) {
+      throw new ValidationError('skills array is required', 'skills')
+    }
+    const agents = await agentStore.findBySkills(body.skills, body.exclude)
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ agents }))
+    return
+  }
+
+  // GET /api/agents/:id
+  if (url.pathname.startsWith('/api/agents/') && req.method === 'GET') {
+    const id = url.pathname.split('/')[3]
+    if (!id) throw new ValidationError('Agent ID is required', 'id')
+    const agent = await agentStore.get(id)
+    if (!agent) throw new NotFoundError('Agent', id)
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ agent }))
+    return
+  }
+
+  // POST /api/agents — create agent
+  if (url.pathname === '/api/agents' && req.method === 'POST') {
+    const body = (req as any).body
+    if (!body.name) throw new ValidationError('name is required', 'name')
+    if (!body.type) throw new ValidationError('type is required', 'type')
+    const agent = await agentStore.create({
+      name: body.name,
+      type: body.type,
+      email: body.email || null,
+      avatar_url: body.avatar_url || null,
+      skills: body.skills || [],
+      bio: body.bio || '',
+      max_concurrent_tasks: body.max_concurrent_tasks || 3,
+      status: body.status || 'active',
+      last_active_at: null,
+    })
+    res.writeHead(201, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ agent }))
+    return
+  }
+
+  // PATCH /api/agents/:id — update agent
+  if (url.pathname.startsWith('/api/agents/') && req.method === 'PATCH') {
+    const id = url.pathname.split('/')[3]
+    if (!id) throw new ValidationError('Agent ID is required', 'id')
+    const body = (req as any).body
+    const agent = await agentStore.update(id, body)
+    if (!agent) throw new NotFoundError('Agent', id)
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ agent }))
     return
   }
 
