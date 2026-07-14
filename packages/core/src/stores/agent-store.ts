@@ -145,7 +145,7 @@ export class SqliteAgentStore implements AgentStore {
 
     if (filter?.status) { sql += ' AND status = ?'; params.push(filter.status) }
     if (filter?.type) { sql += ' AND type = ?'; params.push(filter.type) }
-    if (filter?.skill) { sql += " AND skills LIKE ?"; params.push(`%"${filter.skill}"%`) }
+    if (filter?.skill) { sql += ` AND agents.id IN (SELECT agents.id FROM agents, json_each(agents.skills) WHERE json_each.value = ?)`; params.push(filter.skill) }
     if (filter?.min_credit != null) { sql += ' AND credit_score >= ?'; params.push(filter.min_credit) }
 
     sql += ' ORDER BY created_at DESC'
@@ -174,8 +174,8 @@ export class SqliteAgentStore implements AgentStore {
   async findBySkills(skills: string[], excludeAgentIds: string[] = []): Promise<Agent[]> {
     if (skills.length === 0) return []
 
-    const conditions = skills.map(() => 'skills LIKE ?')
-    const params: any[] = skills.map(s => `%"${s}"%`)
+    const conditions = skills.map(() => `agents.id IN (SELECT agents.id FROM agents, json_each(agents.skills) WHERE json_each.value = ?)`)
+    const params: any[] = [...skills]
 
     let sql = `SELECT * FROM agents WHERE status = 'active' AND (${conditions.join(' OR ')})`
 

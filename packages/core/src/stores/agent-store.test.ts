@@ -140,6 +140,12 @@ describe('SqliteAgentStore', () => {
       expect(agents[0].skills).toContain('python')
     })
 
+    it('should not match substring skill names via list filter', async () => {
+      await store.create(createAgentData({ skills: ['typescript', 'react'] }))
+      const agents = await store.list({ skill: 'type' })
+      expect(agents).toHaveLength(0)
+    })
+
     it('filters by min_credit', async () => {
       const a = await store.create(createAgentData())
       await store.create(createAgentData())
@@ -238,6 +244,12 @@ describe('SqliteAgentStore', () => {
       await store.create(createAgentData())
       const agents = await store.findBySkills([])
       expect(agents).toEqual([])
+    })
+
+    it('should not match substring skill names', async () => {
+      await store.create(createAgentData({ skills: ['typescript', 'react'] }))
+      const results = await store.findBySkills(['type'])
+      expect(results).toHaveLength(0)
     })
   })
 
