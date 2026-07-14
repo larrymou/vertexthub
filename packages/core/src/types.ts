@@ -211,3 +211,61 @@ export interface TaskStore {
   listByStatus(status: TaskStatus): Promise<Task[]>
   stats(): Promise<TaskStats>
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Agent - 组织成员（人/AI）
+// ═══════════════════════════════════════════════════════════════
+
+export type AgentType = 'human' | 'ai'
+
+export interface CreditEntry {
+  task_id: string
+  delta: number
+  reason: string
+  timestamp: Date
+}
+
+export interface Agent {
+  id: string
+  name: string
+  type: AgentType
+  email: string | null
+  avatar_url: string | null
+  skills: string[]
+  bio: string
+  credit_score: number
+  credit_history: CreditEntry[]
+  status: 'active' | 'inactive' | 'suspended'
+  max_concurrent_tasks: number
+  tasks_completed: number
+  tasks_cancelled: number
+  avg_contribution_score: number | null
+  created_at: Date
+  updated_at: Date
+  last_active_at: Date | null
+}
+
+export interface AgentFilter {
+  status?: Agent['status']
+  type?: AgentType
+  skill?: string
+  min_credit?: number
+  limit?: number
+}
+
+export interface AgentStats {
+  total: number
+  by_type: Record<AgentType, number>
+  by_status: Record<string, number>
+  avg_credit_score: number
+}
+
+export interface AgentStore {
+  create(agent: Omit<Agent, 'id' | 'created_at' | 'updated_at' | 'credit_score' | 'credit_history' | 'tasks_completed' | 'tasks_cancelled' | 'avg_contribution_score'>): Promise<Agent>
+  get(id: string): Promise<Agent | null>
+  update(id: string, patch: Partial<Agent>): Promise<Agent>
+  list(filter?: AgentFilter): Promise<Agent[]>
+  adjustCredit(agentId: string, entry: CreditEntry): Promise<Agent>
+  findBySkills(skills: string[], excludeAgentIds?: string[]): Promise<Agent[]>
+  stats(): Promise<AgentStats>
+}
