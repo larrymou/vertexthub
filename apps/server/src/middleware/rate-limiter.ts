@@ -19,13 +19,11 @@ export function createRateLimiter(options: RateLimiterOptions) {
   const { windowMs, maxRequests } = options
 
   const keyGenerator = options.keyGenerator || ((req: IncomingMessage) => {
-    return req.headers['x-forwarded-for'] as string ||
-           req.socket.remoteAddress ||
-           'unknown'
+    return req.socket.remoteAddress || 'unknown'
   })
 
   // Cleanup expired entries periodically
-  setInterval(() => {
+  const intervalHandle = setInterval(() => {
     const now = Date.now()
     for (const [key, entry] of store.entries()) {
       if (entry.resetTime <= now) {
@@ -34,7 +32,7 @@ export function createRateLimiter(options: RateLimiterOptions) {
     }
   }, windowMs)
 
-  return (req: IncomingMessage, res: ServerResponse): boolean => {
+  const handler = (req: IncomingMessage, res: ServerResponse): boolean => {
     const key = keyGenerator(req)
     const now = Date.now()
 
@@ -57,12 +55,14 @@ export function createRateLimiter(options: RateLimiterOptions) {
       res.setHeader('Retry-After', resetSeconds.toString())
       res.writeHead(429, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({
-        error: 'Too many requests',
-        retryAfter: resetSeconds,
+        error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests', retryAfter: resetSeconds },
       }))
       return true
     }
 
     return false
   }
+
+  handler.cleanup = () => clearInterval(intervalHandle)
+  return handler
 }

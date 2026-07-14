@@ -1,25 +1,24 @@
 FROM node:20-alpine AS base
 
-# Install dependencies
 FROM base AS deps
 WORKDIR /app
-COPY package.json ./
+COPY package.json package-lock.json ./
 COPY packages/core/package.json ./packages/core/
+COPY packages/sdk/package.json ./packages/sdk/
 COPY packages/connectors/package.json ./packages/connectors/
 COPY apps/server/package.json ./apps/server/
 COPY turbo.json ./
-RUN npm install --production=false
+RUN npm ci --include=dev
 
-# Build
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/packages/core/node_modules ./packages/core/node_modules
+COPY --from=deps /app/packages/sdk/node_modules ./packages/sdk/node_modules
 COPY --from=deps /app/apps/server/node_modules ./apps/server/node_modules
 COPY . .
 RUN npm run build
 
-# Production
 FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
@@ -28,7 +27,6 @@ ENV LOG_LEVEL=info
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 vertexhub
 
-# Create data directory
 RUN mkdir -p /app/data && chown vertexhub:vertexhub /app/data
 
 COPY --from=builder /app/apps/server/dist ./dist

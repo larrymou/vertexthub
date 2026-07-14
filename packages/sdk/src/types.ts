@@ -1,6 +1,7 @@
 // packages/sdk/src/types.ts
 // VertexHub Connector SDK 类型定义
 
+import { createHash } from 'crypto'
 import { Connector, RawEvent, EntitySchema } from '@vertexhub/core'
 
 // ═══════════════════════════════════════════════════════════════
@@ -43,8 +44,8 @@ export interface CredentialSchema {
 export interface PropertySchema {
   type: 'string' | 'number' | 'boolean' | 'array' | 'object'
   description: string
-  default?: any
-  enum?: any[]
+  default?: unknown
+  enum?: unknown[]
   pattern?: string
   minLength?: number
   maxLength?: number
@@ -66,11 +67,11 @@ export abstract class BaseConnector implements Connector {
   abstract name: string
   abstract type: string
 
-  protected credentials: any = {}
-  protected config: any = {}
+  protected credentials: Record<string, unknown> = {}
+  protected config: Record<string, unknown> = {}
 
-  abstract authenticate(credentials: any): Promise<void>
-  abstract fetch(config: any): Promise<RawEvent[]>
+  abstract authenticate(credentials: Record<string, unknown>): Promise<void>
+  abstract fetch(since?: Date): Promise<RawEvent[]>
   abstract healthCheck(): Promise<boolean>
   abstract schema(): EntitySchema
   abstract capabilities(): string[]
@@ -80,21 +81,15 @@ export abstract class BaseConnector implements Connector {
     return `${prefix}-${id}`
   }
 
-  protected generateChecksum(data: any): string {
+  protected generateChecksum(data: unknown): string {
     const str = JSON.stringify(data)
-    let hash = 0
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i)
-      hash = ((hash << 5) - hash) + char
-      hash = hash & hash
-    }
-    return hash.toString(16)
+    return createHash('sha256').update(str).digest('hex').substring(0, 16)
   }
 
   protected createEvent(params: {
     id: string
     type: string
-    payload: Record<string, any>
+    payload: Record<string, unknown>
     entityRefs: string[]
     timestamp?: Date
   }): RawEvent {

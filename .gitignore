@@ -1,6 +1,14 @@
-node_modules/
+**/node_modules/
 dist/
 .next/
 *.log
 .env
 .env.local
+*.db
+*.db-journal
+*.db-wal
+.env.*.local
+*.tsbuildinfo
+coverage/
+.turbo/
+.mimocode/

@@ -1,7 +1,7 @@
 // packages/connectors/src/github.ts
 // GitHub Connector 实现
 
-import { Connector, RawEvent, EntitySchema } from '@vertexhub/core'
+import { Connector, RawEvent, EntitySchema, ConnectorError } from '@vertexhub/core'
 
 interface GitHubConfig {
   owner: string
@@ -25,7 +25,10 @@ export class GitHubConnector implements Connector {
     this.name = name
   }
 
-  async authenticate(credentials: GitHubCredentials): Promise<void> {
+  async authenticate(credentials: Record<string, unknown>): Promise<void> {
+    if (!credentials || typeof credentials.token !== 'string' || !credentials.token) {
+      throw new Error('GitHub credentials must include a token')
+    }
     this.token = credentials.token
   }
 
@@ -127,7 +130,7 @@ export class GitHubConnector implements Connector {
     }))
   }
 
-  private async githubFetch(url: string): Promise<any[]> {
+  private async githubFetch(url: string): Promise<unknown[]> {
     const response = await fetch(url, {
       headers: {
         Authorization: `token ${this.token}`,
@@ -137,10 +140,10 @@ export class GitHubConnector implements Connector {
     })
 
     if (!response.ok) {
-      throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
+      throw new ConnectorError(`GitHub API error: ${response.status} ${response.statusText}`, this.id)
     }
 
-    return response.json()
+    return response.json() as Promise<unknown[]>
   }
 
   async healthCheck(): Promise<boolean> {

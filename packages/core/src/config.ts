@@ -11,6 +11,7 @@ export interface AppConfig {
   CORS_ORIGIN: string
   RATE_LIMIT_WINDOW_MS: number
   RATE_LIMIT_MAX_REQUESTS: number
+  API_KEY: string | undefined
 }
 
 function required(name: string): string {
@@ -22,7 +23,7 @@ function required(name: string): string {
 }
 
 function optional(name: string, defaultValue: string): string {
-  return process.env[name] || defaultValue
+  return process.env[name] ?? defaultValue
 }
 
 function optionalInt(name: string, defaultValue: number): number {
@@ -54,5 +55,6 @@ export function loadConfig(): AppConfig {
     CORS_ORIGIN: optional('CORS_ORIGIN', '*'),
     RATE_LIMIT_WINDOW_MS: optionalInt('RATE_LIMIT_WINDOW_MS', 60000),
     RATE_LIMIT_MAX_REQUESTS: optionalInt('RATE_LIMIT_MAX_REQUESTS', 100),
+    API_KEY: process.env.API_KEY || undefined,
   }
 }

@@ -11,7 +11,7 @@ export interface RawEvent {
   timestamp: Date
   ingested_at: Date
   type: string
-  payload: Record<string, any>
+  payload: Record<string, unknown>
   entity_refs: string[]
   checksum: string
 }
@@ -24,7 +24,7 @@ export interface Entity {
   id: string
   type: string  // 'person' | 'project' | 'task' | 'document' 等
   source_mappings: SourceMapping[]
-  attributes: Record<string, any>
+  attributes: Record<string, unknown>
   evidence: Evidence[]
   consistency: ConsistencyStatus
 }
@@ -49,7 +49,7 @@ export interface ConsistencyStatus {
 
 export interface Conflict {
   field: string
-  sources: { connector_id: string; value: any }[]
+  sources: { connector_id: string; value: unknown }[]
   severity: 'low' | 'medium' | 'high'
 }
 
@@ -63,8 +63,8 @@ export interface Connector {
   type: string
 
   // 生命周期
-  authenticate(credentials: any): Promise<void>
-  fetch(config: any): Promise<RawEvent[]>
+  authenticate(credentials: Record<string, unknown>): Promise<void>
+  fetch(since?: Date): Promise<RawEvent[]>
 
   // 错误处理
   healthCheck(): Promise<boolean>
@@ -87,7 +87,7 @@ export interface Insight {
   id: string
   type: 'daily' | 'anomaly' | 'weekly' | 'deep_dive'
   target_entity_id: string | null
-  content: Record<string, any>
+  content: Record<string, unknown>
   channel: 'web' | 'slack' | 'email' | 'api'
   delivered_at: Date
 }

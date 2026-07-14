@@ -25,8 +25,8 @@ export class RuleEngine {
 
     for (const event of events) {
       if (event.type === 'pull_request' || event.type === 'issue') {
-        const status = event.payload.state
-        if (status) {
+        const status = (event.payload as Record<string, unknown>).state
+        if (typeof status === 'string') {
           statusBySource.set(event.connector_id, status)
         }
       }
@@ -54,10 +54,10 @@ export class RuleEngine {
   // 检测时间线冲突：PR 已合并但 Issue 未关闭
   private detectTimelineConflict(events: RawEvent[]): Conflict | null {
     const mergedPRs = events.filter(e => 
-      e.type === 'pull_request' && e.payload.merged === true
+      e.type === 'pull_request' && (e.payload as Record<string, unknown>).merged === true
     )
     const openIssues = events.filter(e => 
-      e.type === 'issue' && e.payload.state === 'open'
+      e.type === 'issue' && (e.payload as Record<string, unknown>).state === 'open'
     )
 
     // 如果有已合并的 PR 但关联的 Issue 还是 open，可能是冲突
@@ -104,8 +104,8 @@ export class RuleEngine {
         metrics: { prCount, issueCount, commitCount },
         events: todayEvents.slice(0, 10).map(e => ({
           type: e.type,
-          title: e.payload.title || e.payload.message,
-          author: e.payload.author,
+          title: ((e.payload as Record<string, unknown>).title || (e.payload as Record<string, unknown>).message) as string,
+          author: (e.payload as Record<string, unknown>).author as string,
         })),
       },
       channel: 'web',

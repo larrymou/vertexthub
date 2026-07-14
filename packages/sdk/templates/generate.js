@@ -5,7 +5,7 @@
 
 const fs = require('fs')
 const path = require('path')
-const { ConnectorGenerator } = require('../src/generator')
+const { ConnectorGenerator } = require('../dist/generator')
 
 // 解析命令行参数
 const args = process.argv.slice(2)

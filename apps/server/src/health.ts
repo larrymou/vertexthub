@@ -22,14 +22,7 @@ export interface CheckResult {
 export interface SystemMetrics {
   memoryUsage: NodeJS.MemoryUsage
   cpuUsage: NodeJS.CpuUsage
-  activeHandles: number
-  activeRequests: number
   dbSize?: number
-}
-
-const processWithInternals = process as NodeJS.Process & {
-  _getActiveHandles(): unknown[]
-  _getActiveRequests(): unknown[]
 }
 
 const startTime = Date.now()
@@ -49,7 +42,7 @@ export function createHealthChecker(db: Database, logger: Logger) {
 
   const getDbSize = (): number | undefined => {
     try {
-      const result = db.prepare('SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()').get() as any
+      const result = db.prepare('SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()').get() as { size: number } | undefined
       return result?.size
     } catch {
       return undefined
@@ -60,8 +53,6 @@ export function createHealthChecker(db: Database, logger: Logger) {
     return {
       memoryUsage: process.memoryUsage(),
       cpuUsage: process.cpuUsage(),
-      activeHandles: processWithInternals._getActiveHandles().length,
-      activeRequests: processWithInternals._getActiveRequests().length,
       dbSize: getDbSize(),
     }
   }

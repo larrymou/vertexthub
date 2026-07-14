@@ -38,8 +38,8 @@ export class SlackBot {
   }
 
   // 格式化洞察为 Slack Block Kit
-  private formatInsight(insight: Insight): any[] {
-    const blocks: any[] = []
+  private formatInsight(insight: Insight): unknown[] {
+    const blocks: unknown[] = []
 
     // Header
     blocks.push({
@@ -99,9 +99,10 @@ export class SlackBot {
     }
   }
 
-  private formatDailyInsight(insight: Insight): any[] {
-    const blocks: any[] = []
-    const { summary, metrics, events } = insight.content
+  private formatDailyInsight(insight: Insight): unknown[] {
+    const blocks: unknown[] = []
+    const content = insight.content as Record<string, unknown>
+    const { summary, metrics, events } = content as { summary?: string; metrics?: Record<string, unknown>; events?: Array<Record<string, unknown>> }
 
     if (summary) {
       blocks.push({
@@ -124,7 +125,7 @@ export class SlackBot {
     if (events && events.length > 0) {
       const eventsText = events
         .slice(0, 5)
-        .map((e: any) => `• ${e.type}: ${e.title}`)
+        .map((e) => `${e.type}: ${e.title}`)
         .join('\n')
 
       blocks.push({
@@ -136,9 +137,10 @@ export class SlackBot {
     return blocks
   }
 
-  private formatWeeklyInsight(insight: Insight): any[] {
-    const blocks: any[] = []
-    const { progress, blockers, risks, suggestions } = insight.content
+  private formatWeeklyInsight(insight: Insight): unknown[] {
+    const blocks: unknown[] = []
+    const content = insight.content as Record<string, unknown>
+    const { progress, blockers, risks, suggestions } = content as { progress?: string[]; blockers?: string[]; risks?: string[]; suggestions?: string[] }
 
     if (progress && progress.length > 0) {
       blocks.push({
@@ -183,9 +185,10 @@ export class SlackBot {
     return blocks
   }
 
-  private formatAnomalyInsight(insight: Insight): any[] {
-    const blocks: any[] = []
-    const { message, conflicts } = insight.content
+  private formatAnomalyInsight(insight: Insight): unknown[] {
+    const blocks: unknown[] = []
+    const content = insight.content as Record<string, unknown>
+    const { message, conflicts } = content as { message?: string; conflicts?: Array<Record<string, unknown>> }
 
     if (message) {
       blocks.push({
@@ -196,7 +199,7 @@ export class SlackBot {
 
     if (conflicts && conflicts.length > 0) {
       const conflictsText = conflicts
-        .map((c: any) => `• *${c.field}* (${c.severity}): ${c.details?.length || 0} conflicts`)
+        .map((c) => `*${c.field}* (${c.severity}): ${(c.details as unknown[])?.length || 0} conflicts`)
         .join('\n')
 
       blocks.push({
@@ -208,9 +211,10 @@ export class SlackBot {
     return blocks
   }
 
-  private formatDeepDiveInsight(insight: Insight): any[] {
-    const blocks: any[] = []
-    const { status, timeline, risks, recommendations } = insight.content
+  private formatDeepDiveInsight(insight: Insight): unknown[] {
+    const blocks: unknown[] = []
+    const content = insight.content as Record<string, unknown>
+    const { status, timeline, risks, recommendations } = content as { status?: string; timeline?: string; risks?: string[]; recommendations?: string[] }
 
     if (status) {
       const statusEmoji = status === 'on_track' ? '✅' : status === 'at_risk' ? '⚠️' : '🚫'

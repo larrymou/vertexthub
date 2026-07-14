@@ -49,44 +49,44 @@ function parseEvents(events: RawEvent[]) {
 
   for (const event of events) {
     if (event.type === 'pull_request') {
-      const p = event.payload
-      const existing = prMap.get(p.number)
+      const p = event.payload as Record<string, unknown>
+      const existing = prMap.get(p.number as number)
       if (existing) {
         if (p.merged) {
           existing.merged = true
           existing.state = 'merged'
         }
       } else {
-        prMap.set(p.number, {
-          number: p.number,
-          title: p.title,
-          author: p.author,
-          state: p.merged ? 'merged' : p.state,
+        prMap.set(p.number as number, {
+          number: p.number as number,
+          title: p.title as string,
+          author: p.author as string,
+          state: p.merged ? 'merged' : (p.state as string),
           merged: !!p.merged,
-          labels: p.labels || [],
+          labels: (p.labels as string[]) || [],
         })
       }
     } else if (event.type === 'issue') {
-      const p = event.payload
-      const existing = issueMap.get(p.number)
+      const p = event.payload as Record<string, unknown>
+      const existing = issueMap.get(p.number as number)
       if (existing) {
-        existing.state = p.state
+        existing.state = p.state as string
       } else {
-        issueMap.set(p.number, {
-          number: p.number,
-          title: p.title,
-          author: p.author,
-          state: p.state,
-          labels: p.labels || [],
+        issueMap.set(p.number as number, {
+          number: p.number as number,
+          title: p.title as string,
+          author: p.author as string,
+          state: p.state as string,
+          labels: (p.labels as string[]) || [],
         })
       }
     } else if (event.type === 'commit') {
-      const p = event.payload
+      const p = event.payload as Record<string, unknown>
       commits.push({
-        sha: p.sha,
-        message: p.message,
-        author: p.author,
-        prNumber: p.prNumber,
+        sha: p.sha as string,
+        message: p.message as string,
+        author: p.author as string,
+        prNumber: p.prNumber as number | undefined,
       })
     }
   }

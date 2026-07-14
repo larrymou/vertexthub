@@ -102,7 +102,8 @@ export async function runMockDemo() {
   const dailyInsight = ruleEngine.generateDailySummary(mockEvents)
   await insightStore.save(dailyInsight)
   console.log(`   ✓ ${dailyInsight.content.summary}`)
-  console.log(`   ✓ PRs: ${dailyInsight.content.metrics?.prCount}, Issues: ${dailyInsight.content.metrics?.issueCount}, Commits: ${dailyInsight.content.metrics?.commitCount}\n`)
+  const dailyMetrics = dailyInsight.content.metrics as Record<string, unknown> | undefined
+  console.log(`   ✓ PRs: ${dailyMetrics?.prCount}, Issues: ${dailyMetrics?.issueCount}, Commits: ${dailyMetrics?.commitCount}\n`)
 
   // 4. 生成周报
   console.log('📋 Step 4: Generating weekly summary (AI)...')
@@ -110,9 +111,10 @@ export async function runMockDemo() {
   const weeklyInsight = await summaryGenerator.generateWeeklySummary(mockEvents)
   await insightStore.save(weeklyInsight)
   console.log(`   ✓ Weekly summary generated`)
-  console.log(`   ✓ Progress: ${weeklyInsight.content.progress?.length || 0} items`)
-  console.log(`   ✓ Blockers: ${weeklyInsight.content.blockers?.length || 0}`)
-  console.log(`   ✓ Risks: ${weeklyInsight.content.risks?.length || 0}\n`)
+  const weeklyContent = weeklyInsight.content as Record<string, unknown>
+  console.log(`   ✓ Progress: ${(weeklyContent.progress as unknown[])?.length || 0} items`)
+  console.log(`   ✓ Blockers: ${(weeklyContent.blockers as unknown[])?.length || 0}`)
+  console.log(`   ✓ Risks: ${(weeklyContent.risks as unknown[])?.length || 0}\n`)
 
   // 5. 异常检测
   console.log('🚨 Step 5: Detecting anomalies...')

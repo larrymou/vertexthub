@@ -145,9 +145,10 @@ export class SqliteEntityStore implements EntityStore {
   }
 
   async search(query: string): Promise<Entity[]> {
+    const escaped = query.replace(/[%_]/g, '\\$&')
     const rows = this.db.prepare(
-      "SELECT * FROM entities WHERE attributes LIKE ? LIMIT 50"
-    ).all(`%${query}%`) as any[]
+      "SELECT * FROM entities WHERE attributes LIKE ? ESCAPE '\\' LIMIT 50"
+    ).all(`%${escaped}%`) as any[]
 
     return Promise.all(rows.map(r => this.get(r.id))) as Promise<Entity[]>
   }

@@ -77,9 +77,10 @@ describe('RuleEngine', () => {
 
       const insight = engine.generateDailySummary(events)
       expect(insight.type).toBe('daily')
-      expect(insight.content.metrics?.prCount).toBe(2)
-      expect(insight.content.metrics?.issueCount).toBe(1)
-      expect(insight.content.metrics?.commitCount).toBe(1)
+      const metrics = insight.content.metrics as Record<string, unknown>
+      expect(metrics?.prCount).toBe(2)
+      expect(metrics?.issueCount).toBe(1)
+      expect(metrics?.commitCount).toBe(1)
     })
   })
 

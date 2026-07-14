@@ -14,6 +14,8 @@ import { createCorsMiddleware } from './middleware/cors'
 import { createRateLimiter } from './middleware/rate-limiter'
 import { createRequestLogger } from './middleware/request-logger'
 import { createErrorHandler } from './middleware/error-handler'
+import { createAuthMiddleware } from './middleware/auth'
+import { parseBody } from './middleware/body-parser'
 import { validate, validateQueryParams } from './middleware/validator'
 import { createHealthChecker } from './health'
 
@@ -32,12 +34,14 @@ const insightStore = new SqliteInsightStore(db)
 const ruleEngine = new RuleEngine()
 const healthChecker = createHealthChecker(db, logger)
 
-// Seed demo data on first startup
-const seedResult = seedDemoData(db)
-if (seedResult.seeded) {
-  logger.info(`Seeded demo data: ${seedResult.events} events`)
-} else {
-  logger.info(`Demo data already exists: ${seedResult.events} events`)
+// Seed demo data on first startup (non-production only)
+if (config.NODE_ENV !== 'production') {
+  const seedResult = seedDemoData(db)
+  if (seedResult.seeded) {
+    logger.info(`Seeded demo data: ${seedResult.events} events`)
+  } else {
+    logger.info(`Demo data already exists: ${seedResult.events} events`)
+  }
 }
 
 // Auto-generate weekly report on startup
@@ -58,6 +62,10 @@ const rateLimiter = createRateLimiter({
   windowMs: config.RATE_LIMIT_WINDOW_MS,
   maxRequests: config.RATE_LIMIT_MAX_REQUESTS,
 })
+const authMiddleware = createAuthMiddleware({
+  apiKey: config.API_KEY,
+  publicPaths: ['/health'],
+})
 const requestLogger = createRequestLogger(logger)
 const errorHandler = createErrorHandler(logger)
 
@@ -71,7 +79,7 @@ async function handleRequest(
   // Health check
   if (url.pathname === '/health' && req.method === 'GET') {
     const health = await healthChecker.getHealth()
-    const statusCode = health.status === 'healthy' ? 200 : health.status === 'degraded' ? 200 : 503
+    const statusCode = health.status === 'unhealthy' ? 503 : 200
     res.writeHead(statusCode, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify(health))
     return
@@ -161,6 +169,13 @@ const server = http.createServer(async (req, res) => {
 
   // Rate limiting
   if (rateLimiter(req, res)) return
+
+  // Auth
+  if (authMiddleware(req, res)) return
+
+  // Body parsing
+  const body = await parseBody(req)
+  ;(req as any).body = body
 
   // Request logging
   requestLogger(req, res, startTime)

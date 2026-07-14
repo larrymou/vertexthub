@@ -30,24 +30,38 @@ interface Insight {
 interface Entity {
   id: string
   type: string
-  attributes?: Record<string, any>
+  attributes?: Record<string, string | number | boolean>
   consistency: {
     status: string
     last_checked: string
   }
 }
 
+function isValidInsight(data: unknown): data is Insight {
+  if (!data || typeof data !== 'object') return false
+  const obj = data as Record<string, unknown>
+  return typeof obj.id === 'string' && typeof obj.type === 'string' && typeof obj.content === 'object' && obj.content !== null
+}
+
+function isValidEntity(data: unknown): data is Entity {
+  if (!data || typeof data !== 'object') return false
+  const obj = data as Record<string, unknown>
+  return typeof obj.id === 'string' && typeof obj.type === 'string'
+}
+
 interface ErrorBoundaryProps {
   children: ReactNode
+  onRetry?: () => void
 }
 
 interface ErrorBoundaryState {
   hasError: boolean
   error: Error | null
+  retryCount: number
 }
 
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = { hasError: false, error: null }
+  state: ErrorBoundaryState = { hasError: false, error: null, retryCount: 0 }
 
   static getDerivedStateFromError(error: Error) {
     return { hasError: true, error }
@@ -60,7 +74,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           <div className="error">
             <h2>Something went wrong</h2>
             <p>{this.state.error?.message || 'An unexpected error occurred.'}</p>
-            <button className="btn" onClick={() => this.setState({ hasError: false, error: null })}>
+            <button className="btn" onClick={() => {
+              this.setState(prev => ({ hasError: false, error: null, retryCount: prev.retryCount + 1 }))
+              this.props.onRetry?.()
+            }}>
               Retry
             </button>
           </div>
@@ -78,9 +95,12 @@ export function App() {
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [activeTab, setActiveTab] = useState<'report' | 'insights' | 'entities'>('report')
+  const [error, setError] = useState<string | null>(null)
+  const [errorKey, setErrorKey] = useState(0)
 
   const loadData = useCallback(async () => {
     setLoading(true)
+    setError(null)
     try {
       const [insightsRes, entitiesRes] = await Promise.all([
         fetch('/api/insights'),
@@ -89,7 +109,7 @@ export function App() {
 
       if (insightsRes.ok) {
         const data = await insightsRes.json()
-        const allInsights = data.insights || []
+        const allInsights = (data.insights || []).filter(isValidInsight)
         setInsights(allInsights)
 
         // Find the latest weekly report
@@ -105,17 +125,22 @@ export function App() {
 
       if (entitiesRes.ok) {
         const data = await entitiesRes.json()
-        setEntities(data.entities || [])
+        setEntities((data.entities || []).filter(isValidEntity))
       }
     } catch (err) {
       console.error('Failed to load data:', err)
+      setError('Failed to load data. Please try again.')
     } finally {
       setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    loadData()
+    if (window.location.pathname === '/') {
+      loadData()
+    } else {
+      setLoading(false)
+    }
   }, [loadData])
 
   const handleRefresh = async () => {
@@ -132,6 +157,7 @@ export function App() {
       }
     } catch (err) {
       console.error('Failed to generate report:', err)
+      setError('Failed to generate report. Please try again.')
     } finally {
       setGenerating(false)
     }
@@ -158,45 +184,64 @@ export function App() {
   }
 
   return (
-    <div className="container">
-      <header className="header">
-        <h1>VertexHub</h1>
-        <p className="subtitle">Organizational Nervous System</p>
-      </header>
+    <ErrorBoundary key={errorKey} onRetry={() => { setErrorKey(k => k + 1); loadData() }}>
+      <div className="container">
+        <header className="header">
+          <h1>VertexHub</h1>
+          <p className="subtitle">Organizational Nervous System</p>
+        </header>
 
-      <nav className="tabs">
-        <button
-          className={`tab ${activeTab === 'report' ? 'active' : ''}`}
-          onClick={() => setActiveTab('report')}
-        >
-          Weekly Report
-        </button>
-        <button
-          className={`tab ${activeTab === 'insights' ? 'active' : ''}`}
-          onClick={() => setActiveTab('insights')}
-        >
-          Insights ({insights.length})
-        </button>
-        <button
-          className={`tab ${activeTab === 'entities' ? 'active' : ''}`}
-          onClick={() => setActiveTab('entities')}
-        >
-          Entities ({entities.length})
-        </button>
-      </nav>
-
-      <main className="content">
-        {activeTab === 'report' && (
-          <WeeklyReportView
-            report={weeklyReport}
-            generating={generating}
-            onRefresh={handleRefresh}
-          />
+        {error && (
+          <div className="error-banner" role="alert">
+            <p>{error}</p>
+            <button className="btn" onClick={() => { setError(null); loadData() }}>Dismiss</button>
+          </div>
         )}
-        {activeTab === 'insights' && <InsightsList insights={insights} />}
-        {activeTab === 'entities' && <EntitiesList entities={entities} />}
-      </main>
-    </div>
+
+        <nav className="tabs" role="tablist">
+          <button
+            role="tab"
+            aria-selected={activeTab === 'report'}
+            className={`tab ${activeTab === 'report' ? 'active' : ''}`}
+            onClick={() => setActiveTab('report')}
+          >
+            Weekly Report
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === 'insights'}
+            className={`tab ${activeTab === 'insights' ? 'active' : ''}`}
+            onClick={() => setActiveTab('insights')}
+          >
+            Insights ({insights.length})
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === 'entities'}
+            className={`tab ${activeTab === 'entities' ? 'active' : ''}`}
+            onClick={() => setActiveTab('entities')}
+          >
+            Entities ({entities.length})
+          </button>
+        </nav>
+
+        <main className="content">
+          <div role="tabpanel" hidden={activeTab !== 'report'}>
+            <WeeklyReportView
+              report={weeklyReport}
+              generating={generating}
+              onRefresh={handleRefresh}
+            />
+          </div>
+          <div role="tabpanel" hidden={activeTab !== 'insights'}>
+            <InsightsList insights={insights} />
+          </div>
+          <div role="tabpanel" hidden={activeTab !== 'entities'}>
+            <EntitiesList entities={entities} />
+          </div>
+        </main>
+      </div>
+    </ErrorBoundary>
   )
 }
 
@@ -233,37 +278,37 @@ function WeeklyReportView({
 
       {/* Metrics Grid */}
       <div className="metrics-grid">
-        {content.metrics.pr_merge_rate !== undefined && (
+        {content.metrics?.pr_merge_rate !== undefined && (
           <div className="metric-card">
             <span className="metric-value">{Math.round(content.metrics.pr_merge_rate * 100)}%</span>
             <span className="metric-label">PR Merge Rate</span>
           </div>
         )}
-        {content.metrics.merged_prs !== undefined && (
+        {content.metrics?.merged_prs !== undefined && (
           <div className="metric-card">
             <span className="metric-value">{content.metrics.merged_prs}/{content.metrics.total_prs}</span>
             <span className="metric-label">PRs Merged</span>
           </div>
         )}
-        {content.metrics.total_commits !== undefined && (
+        {content.metrics?.total_commits !== undefined && (
           <div className="metric-card">
             <span className="metric-value">{content.metrics.total_commits}</span>
             <span className="metric-label">Commits</span>
           </div>
         )}
-        {content.metrics.active_contributors !== undefined && (
+        {content.metrics?.active_contributors !== undefined && (
           <div className="metric-card">
             <span className="metric-value">{content.metrics.active_contributors}</span>
             <span className="metric-label">Contributors</span>
           </div>
         )}
-        {content.metrics.bugs_closed !== undefined && (
+        {content.metrics?.bugs_closed !== undefined && (
           <div className="metric-card">
             <span className="metric-value">{content.metrics.bugs_closed}</span>
             <span className="metric-label">Bugs Fixed</span>
           </div>
         )}
-        {content.metrics.open_prs !== undefined && (
+        {content.metrics?.open_prs !== undefined && (
           <div className="metric-card">
             <span className="metric-value">{content.metrics.open_prs}</span>
             <span className="metric-label">Open PRs</span>
@@ -283,7 +328,7 @@ function WeeklyReportView({
           <h3>Highlights</h3>
           <ul className="highlight-list">
             {content.highlights.map((h, i) => (
-              <li key={i} className="highlight-item">{h}</li>
+              <li key={`h-${i}-${h.slice(0,30)}`} className="highlight-item">{h}</li>
             ))}
           </ul>
         </div>
@@ -295,7 +340,7 @@ function WeeklyReportView({
           <h3>Risks</h3>
           <ul className="risk-list">
             {content.risks.map((r, i) => (
-              <li key={i} className="risk-item">{r}</li>
+              <li key={`r-${i}-${r.slice(0,30)}`} className="risk-item">{r}</li>
             ))}
           </ul>
         </div>
@@ -349,7 +394,7 @@ function InsightsList({ insights }: { insights: Insight[] }) {
             {insight.content.events && insight.content.events.length > 0 && (
               <ul className="events">
                 {insight.content.events.map((event, i) => (
-                  <li key={i}>
+                  <li key={`${event.type}-${i}-${event.title.slice(0,20)}`}>
                     <span className="event-type">{event.type}</span>
                     {event.title}
                     {event.author && <span className="author"> by {event.author}</span>}
