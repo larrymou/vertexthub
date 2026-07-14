@@ -269,3 +269,73 @@ export interface AgentStore {
   findBySkills(skills: string[], excludeAgentIds?: string[]): Promise<Agent[]>
   stats(): Promise<AgentStats>
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Skill - 技能体系
+// ═══════════════════════════════════════════════════════════════
+
+export interface Skill {
+  id: string
+  name: string
+  display_name: string
+  category: string
+  description: string
+  parent_id: string | null
+  created_at: Date
+  updated_at: Date
+}
+
+export interface AgentSkill {
+  agent_id: string
+  skill_id: string
+  proficiency: number
+  verified: boolean
+  updated_at: Date
+}
+
+export interface TaskSkill {
+  task_id: string
+  skill_id: string
+  min_proficiency: number
+  required: boolean
+}
+
+export interface SkillFilter {
+  category?: string
+  parent_id?: string | null
+  search?: string
+  limit?: number
+}
+
+export interface SkillStats {
+  total: number
+  by_category: Record<string, number>
+  top_skills: { skill_id: string; name: string; agent_count: number }[]
+}
+
+export interface MatchResult {
+  agent: Agent
+  score: number
+  matched_skills: string[]
+  missing_skills: string[]
+}
+
+export interface SkillStore {
+  create(skill: Omit<Skill, 'id' | 'created_at' | 'updated_at'>): Promise<Skill>
+  get(id: string): Promise<Skill | null>
+  getByName(name: string): Promise<Skill | null>
+  list(filter?: SkillFilter): Promise<Skill[]>
+  update(id: string, patch: Partial<Skill>): Promise<Skill>
+  delete(id: string): Promise<void>
+
+  addAgentSkill(agentId: string, skillId: string, proficiency: number): Promise<AgentSkill>
+  removeAgentSkill(agentId: string, skillId: string): Promise<void>
+  getAgentSkills(agentId: string): Promise<AgentSkill[]>
+  updateProficiency(agentId: string, skillId: string, proficiency: number): Promise<AgentSkill>
+
+  addTaskSkill(taskId: string, skillId: string, minProficiency: number, required: boolean): Promise<TaskSkill>
+  removeTaskSkill(taskId: string, skillId: string): Promise<void>
+  getTaskSkills(taskId: string): Promise<TaskSkill[]>
+
+  stats(): Promise<SkillStats>
+}
