@@ -225,7 +225,13 @@ async function handleRequest(
     const id = url.pathname.split('/')[3]
     if (!id) throw new ValidationError('Skill ID is required', 'id')
     const body = (req as any).body
-    const skill = await skillStore.update(id, body)
+    const allowed: Record<string, unknown> = {}
+    if ('name' in body) allowed.name = body.name
+    if ('display_name' in body) allowed.display_name = body.display_name
+    if ('category' in body) allowed.category = body.category
+    if ('description' in body) allowed.description = body.description
+    if ('parent_id' in body) allowed.parent_id = body.parent_id
+    const skill = await skillStore.update(id, allowed)
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ skill }))
     return
@@ -465,7 +471,15 @@ async function handleRequest(
     const id = url.pathname.split('/')[3]
     if (!id) throw new ValidationError('Agent ID is required', 'id')
     const body = (req as any).body
-    const agent = await agentStore.update(id, body)
+    const allowed: Record<string, unknown> = {}
+    if ('name' in body) allowed.name = body.name
+    if ('email' in body) allowed.email = body.email
+    if ('avatar_url' in body) allowed.avatar_url = body.avatar_url
+    if ('bio' in body) allowed.bio = body.bio
+    if ('skills' in body) allowed.skills = body.skills
+    if ('status' in body) allowed.status = body.status
+    if ('max_concurrent_tasks' in body) allowed.max_concurrent_tasks = body.max_concurrent_tasks
+    const agent = await agentStore.update(id, allowed)
     if (!agent) throw new NotFoundError('Agent', id)
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ agent }))

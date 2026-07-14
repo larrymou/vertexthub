@@ -51,63 +51,65 @@ export class SqliteEntityStore implements EntityStore {
   async upsert(entity: Entity): Promise<void> {
     const now = new Date().toISOString()
 
-    // Upsert entity
-    const stmt = this.db.prepare(`
-      INSERT INTO entities (id, type, status, attributes, consistency_status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        type = excluded.type,
-        status = excluded.status,
-        attributes = excluded.attributes,
-        consistency_status = excluded.consistency_status,
-        updated_at = excluded.updated_at
-    `)
+    const upsertTx = this.db.transaction(() => {
+      // Upsert entity
+      const stmt = this.db.prepare(`
+        INSERT INTO entities (id, type, attributes, consistency_status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          type = excluded.type,
+          attributes = excluded.attributes,
+          consistency_status = excluded.consistency_status,
+          updated_at = excluded.updated_at
+      `)
 
-    stmt.run(
-      entity.id,
-      entity.type,
-      entity.consistency.status,
-      JSON.stringify(entity.attributes),
-      entity.consistency.status,
-      now,
-      now
-    )
-
-    // Upsert mappings
-    const mappingStmt = this.db.prepare(`
-      INSERT INTO entity_mappings (entity_id, connector_id, external_id, last_synced)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(entity_id, connector_id) DO UPDATE SET
-        external_id = excluded.external_id,
-        last_synced = excluded.last_synced
-    `)
-
-    for (const mapping of entity.source_mappings) {
-      mappingStmt.run(
+      stmt.run(
         entity.id,
-        mapping.connector_id,
-        mapping.external_id,
-        mapping.last_synced.toISOString()
+        entity.type,
+        JSON.stringify(entity.attributes),
+        entity.consistency.status,
+        now,
+        now
       )
-    }
 
-    // Upsert evidence
-    const evidenceStmt = this.db.prepare(`
-      INSERT INTO entity_evidence (id, entity_id, source, confidence, raw_event_id)
-      VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        confidence = excluded.confidence
-    `)
+      // Upsert mappings
+      const mappingStmt = this.db.prepare(`
+        INSERT INTO entity_mappings (entity_id, connector_id, external_id, last_synced)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(entity_id, connector_id) DO UPDATE SET
+          external_id = excluded.external_id,
+          last_synced = excluded.last_synced
+      `)
 
-    for (const evidence of entity.evidence) {
-      evidenceStmt.run(
-        `${entity.id}-${evidence.source}-${evidence.raw_event_id}`,
-        entity.id,
-        evidence.source,
-        evidence.confidence,
-        evidence.raw_event_id
-      )
-    }
+      for (const mapping of entity.source_mappings) {
+        mappingStmt.run(
+          entity.id,
+          mapping.connector_id,
+          mapping.external_id,
+          mapping.last_synced.toISOString()
+        )
+      }
+
+      // Upsert evidence
+      const evidenceStmt = this.db.prepare(`
+        INSERT INTO entity_evidence (id, entity_id, source, confidence, raw_event_id)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          confidence = excluded.confidence
+      `)
+
+      for (const evidence of entity.evidence) {
+        evidenceStmt.run(
+          `${entity.id}-${evidence.source}-${evidence.raw_event_id}`,
+          entity.id,
+          evidence.source,
+          evidence.confidence,
+          evidence.raw_event_id
+        )
+      }
+    })
+
+    upsertTx()
   }
 
   async get(id: string): Promise<Entity | null> {

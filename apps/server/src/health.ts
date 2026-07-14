@@ -2,7 +2,7 @@
 // Enhanced health check and system metrics
 
 import { Database } from 'better-sqlite3'
-import { Logger } from '@vertexhub/core/src/logger'
+import { Logger } from '@vertexhub/core'
 
 export interface HealthStatus {
   status: 'healthy' | 'degraded' | 'unhealthy'
