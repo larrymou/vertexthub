@@ -72,7 +72,7 @@ export class SqliteAgentStore implements AgentStore {
         credit_score, credit_history, status, max_concurrent_tasks,
         tasks_completed, tasks_cancelled, avg_contribution_score,
         created_at, updated_at, last_active_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 100, '[]', ?, ?, 0, 0, NULL, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 0, '[]', ?, ?, 0, 0, NULL, ?, ?, ?)
     `)
     stmt.run(
       id,
