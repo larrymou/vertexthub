@@ -6,6 +6,7 @@ export { SqliteEventStore } from './stores/event-store'
 export { SqliteEntityStore } from './stores/entity-store'
 export { SqliteInsightStore } from './stores/insight-store'
 export { SqliteTaskStore } from './stores/task-store'
+export { SqliteAgentStore } from './stores/agent-store'
 export {
   ConnectorRegistry,
   ConnectorNotFoundError,
@@ -50,3 +51,9 @@ export {
   calculateContributionScore,
   type ContributionScoreParams,
 } from './engine/task-state-machine'
+
+// Services
+export { AgentService } from './services/agent-service'
+
+// Stores
+export { SqliteAgentStore } from './stores/agent-store'
