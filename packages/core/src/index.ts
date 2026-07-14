@@ -5,6 +5,7 @@ export * from './types'
 export { SqliteEventStore } from './stores/event-store'
 export { SqliteEntityStore } from './stores/entity-store'
 export { SqliteInsightStore } from './stores/insight-store'
+export { SqliteTaskStore } from './stores/task-store'
 export {
   ConnectorRegistry,
   ConnectorNotFoundError,

@@ -4,3 +4,4 @@
 export { SqliteEventStore } from './event-store'
 export { SqliteEntityStore } from './entity-store'
 export { SqliteInsightStore } from './insight-store'
+export { SqliteTaskStore } from './task-store'
