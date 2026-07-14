@@ -287,8 +287,8 @@ export function App() {
     setGenerating(true)
     try {
       const res = await fetch('/api/insights/weekly', { method: 'POST' })
-      if (res.ok) {
-        const data = await res.json()
+      const data = await res.json()
+      if (res.ok && data.insight) {
         setWeeklyReport({
           id: data.insight.id,
           content: data.insight.content,
@@ -498,11 +498,11 @@ function WeeklyReportView({
       </div>
 
       {/* Highlights */}
-      {content.highlights.length > 0 && (
+      {content.highlights?.length > 0 && (
         <div className="section">
           <h3>Highlights</h3>
           <ul className="highlight-list">
-            {content.highlights.map((h, i) => (
+            {content.highlights?.map((h, i) => (
               <li key={`h-${i}-${h.slice(0,30)}`} className="highlight-item">{h}</li>
             ))}
           </ul>
@@ -510,11 +510,11 @@ function WeeklyReportView({
       )}
 
       {/* Risks */}
-      {content.risks.length > 0 && (
+      {content.risks?.length > 0 && (
         <div className="section">
           <h3>Risks</h3>
           <ul className="risk-list">
-            {content.risks.map((r, i) => (
+            {content.risks?.map((r, i) => (
               <li key={`r-${i}-${r.slice(0,30)}`} className="risk-item">{r}</li>
             ))}
           </ul>

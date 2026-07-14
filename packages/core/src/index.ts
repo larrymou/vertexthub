@@ -56,5 +56,8 @@ export {
 // Match engine
 export { MatchEngine } from './engine/match-engine'
 
+// Rule engine
+export { RuleEngine } from './engine/rule-engine'
+
 // Services
 export { AgentService } from './services/agent-service'
