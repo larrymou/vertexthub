@@ -84,6 +84,26 @@ interface AgentStats {
   avg_credit_score: number
 }
 
+// 验证指标
+interface VerificationMetrics {
+  efficiency: {
+    avg_decision_hours: number
+    avg_delivery_hours: number
+    decision_count: number
+  }
+  output: {
+    completion_rate: number
+    tasks_per_agent: number
+    total_done: number
+  }
+  health: {
+    avg_contribution_score: number
+    cancel_rate: number
+    active_agent_count: number
+    total_agents: number
+  }
+}
+
 // 匹配结果
 interface MatchResult {
   agent: Agent
@@ -141,6 +161,71 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     }
     return this.props.children
   }
+}
+
+// 验证指标组件
+function MetricsView() {
+  const [metrics, setMetrics] = useState<VerificationMetrics | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [collapsed, setCollapsed] = useState(false)
+
+  useEffect(() => {
+    const fetchMetrics = async () => {
+      setLoading(true)
+      try {
+        const res = await fetch('/api/metrics/verification')
+        if (res.ok) {
+          const data = await res.json()
+          setMetrics(data)
+        }
+      } catch {
+        // silent
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchMetrics()
+  }, [])
+
+  if (loading) return <div className="loading">Loading metrics...</div>
+  if (!metrics) return null
+
+  return (
+    <div className="metrics-header">
+      <div className="metrics-toggle" onClick={() => setCollapsed(!collapsed)}>
+        <span className="metrics-toggle-label">Verification Metrics</span>
+        <span className="metrics-toggle-icon">{collapsed ? '▸' : '▾'}</span>
+      </div>
+      {!collapsed && (
+        <div className="metrics-grid">
+          <div className="metric-card">
+            <span className="metric-value">{metrics.efficiency.avg_decision_hours.toFixed(1)}</span>
+            <span className="metric-label">Avg Decision Time (h)</span>
+          </div>
+          <div className="metric-card">
+            <span className="metric-value">{metrics.efficiency.avg_delivery_hours.toFixed(1)}</span>
+            <span className="metric-label">Avg Delivery Time (h)</span>
+          </div>
+          <div className="metric-card">
+            <span className="metric-value">{(metrics.output.completion_rate * 100).toFixed(0)}%</span>
+            <span className="metric-label">Completion Rate</span>
+          </div>
+          <div className="metric-card">
+            <span className="metric-value">{metrics.output.tasks_per_agent.toFixed(1)}</span>
+            <span className="metric-label">Tasks per Agent</span>
+          </div>
+          <div className="metric-card">
+            <span className="metric-value">{metrics.health.avg_contribution_score.toFixed(1)}</span>
+            <span className="metric-label">Avg Contribution Score</span>
+          </div>
+          <div className="metric-card">
+            <span className="metric-value">{(metrics.health.cancel_rate * 100).toFixed(0)}%</span>
+            <span className="metric-label">Cancel Rate</span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function App() {
@@ -252,6 +337,8 @@ export function App() {
             <button className="btn" onClick={() => { setError(null); loadData() }}>Dismiss</button>
           </div>
         )}
+
+        <MetricsView />
 
         <nav className="tabs" role="tablist">
           <button

@@ -687,3 +687,42 @@ body {
 
 .badge-human { background: rgba(0, 184, 148, 0.15); color: var(--success); }
 .badge-ai { background: rgba(108, 92, 231, 0.15); color: var(--accent-light); }
+
+/* Metrics Header */
+.metrics-header {
+  margin-bottom: 24px;
+}
+
+.metrics-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.metrics-toggle:hover {
+  background: var(--surface-hover);
+}
+
+.metrics-toggle-label {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.metrics-toggle-icon {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.metrics-header .metrics-grid {
+  margin-top: 12px;
+}

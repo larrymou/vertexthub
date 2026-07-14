@@ -75,6 +75,10 @@ const authMiddleware = createAuthMiddleware({
 const requestLogger = createRequestLogger(logger)
 const errorHandler = createErrorHandler(logger)
 
+function avg(nums: number[]): number {
+  return nums.length > 0 ? nums.reduce((a, b) => a + b, 0) / nums.length : 0
+}
+
 // Route handler
 async function handleRequest(
   req: http.IncomingMessage,
@@ -655,6 +659,49 @@ async function handleRequest(
     const saved = await taskStore.update(body.task_id, updated)
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ task: saved }))
+    return
+  }
+
+  // Verification metrics
+  if (url.pathname === '/api/metrics/verification' && req.method === 'GET') {
+    const tasks = await taskStore.list()
+    const agents = await agentStore.list()
+    const stats = await taskStore.stats()
+
+    const doneTasks = tasks.filter(t => t.status === 'done')
+    const cancelledTasks = tasks.filter(t => t.status === 'cancelled')
+
+    const decisionTimes = tasks
+      .filter(t => t.started_at && t.created_at)
+      .map(t => (new Date(t.started_at!).getTime() - new Date(t.created_at).getTime()) / (1000 * 60 * 60))
+
+    const deliveryTimes = doneTasks
+      .filter(t => t.started_at && t.completed_at)
+      .map(t => (new Date(t.completed_at!).getTime() - new Date(t.started_at!).getTime()) / (1000 * 60 * 60))
+
+    const activeAgents = agents.filter(a => a.status === 'active')
+
+    const scores = doneTasks.filter(t => t.contribution_score !== null).map(t => t.contribution_score!)
+
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({
+      efficiency: {
+        avg_decision_hours: avg(decisionTimes),
+        avg_delivery_hours: avg(deliveryTimes),
+        decision_count: decisionTimes.length,
+      },
+      output: {
+        completion_rate: stats.completion_rate,
+        tasks_per_agent: activeAgents.length > 0 ? doneTasks.length / activeAgents.length : 0,
+        total_done: doneTasks.length,
+      },
+      health: {
+        avg_contribution_score: avg(scores),
+        cancel_rate: tasks.length > 0 ? cancelledTasks.length / tasks.length : 0,
+        active_agent_count: activeAgents.length,
+        total_agents: agents.length,
+      },
+    }))
     return
   }
 
