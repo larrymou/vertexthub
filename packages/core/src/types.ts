@@ -151,3 +151,63 @@ export interface CompleteOptions {
   maxTokens?: number
   systemPrompt?: string
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Task - 任务
+// ═══════════════════════════════════════════════════════════════
+
+export type TaskStatus =
+  | 'open'
+  | 'assigned'
+  | 'in_progress'
+  | 'review'
+  | 'revision'
+  | 'done'
+  | 'cancelled'
+
+export interface Task {
+  id: string
+  title: string
+  description: string
+  status: TaskStatus
+  priority: 'low' | 'medium' | 'high' | 'urgent'
+  type: string
+  creator_id: string
+  assignee_id: string | null
+  created_at: Date
+  updated_at: Date
+  started_at: Date | null
+  completed_at: Date | null
+  deadline: Date | null
+  entity_refs: string[]
+  tags: string[]
+  deliverables: string[]
+  contribution_score: number | null
+  review_notes: string | null
+}
+
+export interface TaskFilter {
+  status?: TaskStatus
+  assignee_id?: string
+  creator_id?: string
+  priority?: Task['priority']
+  type?: string
+  limit?: number
+}
+
+export interface TaskStats {
+  total: number
+  by_status: Record<TaskStatus, number>
+  avg_completion_hours: number | null
+  completion_rate: number
+}
+
+export interface TaskStore {
+  create(task: Omit<Task, 'id' | 'created_at' | 'updated_at'>): Promise<Task>
+  get(id: string): Promise<Task | null>
+  update(id: string, patch: Partial<Task>): Promise<Task>
+  list(filter?: TaskFilter): Promise<Task[]>
+  listByAssignee(assigneeId: string, status?: TaskStatus): Promise<Task[]>
+  listByStatus(status: TaskStatus): Promise<Task[]>
+  stats(): Promise<TaskStats>
+}
