@@ -116,10 +116,6 @@ describe('AgentService', () => {
           status: 'review',
           assignee_id: agent.id,
           started_at: new Date('2025-01-01'),
-          completed_at: new Date('2025-01-10'),
-          deadline: new Date('2025-01-10'),
-          priority: 'medium',
-          type: 'standard',
         }),
       )
 

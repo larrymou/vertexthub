@@ -54,12 +54,12 @@ export class AgentService {
     if (!agent) throw new ConflictError(`Agent ${task.assignee_id} not found`)
 
     if (score === undefined) {
-      if (!task.started_at || !task.completed_at) {
-        throw new ValidationError('Cannot auto-calculate score without started_at and completed_at')
+      if (!task.started_at) {
+        throw new ValidationError('Cannot auto-calculate score without started_at')
       }
       score = calculateContributionScore({
         started_at: task.started_at,
-        completed_at: task.completed_at,
+        completed_at: new Date(),
         deadline: task.deadline,
         priority: task.priority,
         type: task.type,
