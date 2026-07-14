@@ -129,7 +129,7 @@ describe('MatchEngine', () => {
 
     const map = new Map([
       ['a', [makeAgentSkill('s1', 5, 'a')]],
-      ['b', [makeAgentSkill('s1', 5, 'b')]],
+      ['b', [makeAgentSkill('s1', 6, 'b')]],
     ])
 
     const results = engine.matchAgents(taskSkills, [agentA, agentB], map)
@@ -137,10 +137,10 @@ describe('MatchEngine', () => {
     expect(results).toHaveLength(2)
     expect(results[0].agent.id).toBe('b')
     expect(results[1].agent.id).toBe('a')
-    // a: 20 + min(2,10)=2 + floor(200/200*10)=10 = 32
-    // b: 20 + min(2,10)=2 + floor(800/200*10)=40 = 62
-    expect(results[0].score).toBe(62)
-    expect(results[1].score).toBe(32)
+    // a: 20 + min((5-3)*2,10)=4 + floor(200/200*10)=10 = 34
+    // b: 20 + min((6-3)*2,10)=6 + floor(800/200*10)=40 = 66
+    expect(results[0].score).toBe(66)
+    expect(results[1].score).toBe(34)
   })
 
   it('empty task skills → all agents score 0 (credit only)', () => {

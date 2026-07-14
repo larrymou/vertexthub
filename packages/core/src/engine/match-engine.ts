@@ -50,7 +50,10 @@ export class MatchEngine {
 
       // Proficiency bonus: +2 per level above min, cap +10
       let proficiencyBonus = 0
+      const seenSkills = new Set<string>()
       for (const ts of taskSkills) {
+        if (seenSkills.has(ts.skill_id)) continue
+        seenSkills.add(ts.skill_id)
         const as = skillMap.get(ts.skill_id)
         if (as && as.proficiency > ts.min_proficiency) {
           proficiencyBonus += Math.min((as.proficiency - ts.min_proficiency) * 2, 10)
