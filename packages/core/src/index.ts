@@ -54,6 +54,3 @@ export {
 
 // Services
 export { AgentService } from './services/agent-service'
-
-// Stores
-export { SqliteAgentStore } from './stores/agent-store'
