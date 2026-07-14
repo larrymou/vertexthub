@@ -1,5 +1,7 @@
 # VertexHub
 
+[![CI](https://github.com/larrymou/vertexthub/actions/workflows/ci.yml/badge.svg)](https://github.com/larrymou/vertexthub/actions/workflows/ci.yml)
+
 **Organizational Nervous System** — Eliminate organizational blindness by creating a unified "truth layer" from scattered tools and data sources.
 
 ## 🎉 MVP Complete!
@@ -22,7 +24,7 @@ VertexHub MVP is now complete with all three phases delivered:
 
 ```bash
 # Clone the repo
-git clone https://github.com/your-org/vertexhub.git
+git clone https://github.com/larrymou/vertexthub.git
 cd vertexhub
 
 # Install dependencies
@@ -37,14 +39,14 @@ npx ts-node src/demo/mock-demo.ts
 
 ```bash
 # Clone the repo
-git clone https://github.com/your-org/vertexhub.git
+git clone https://github.com/larrymou/vertexthub.git
 cd vertexhub
 
 # Start with Docker Compose
 docker-compose up -d
 
-# Access the dashboard
-open http://localhost:3000
+# Access the API
+open http://localhost:3000/health
 ```
 
 ## Architecture
@@ -103,16 +105,25 @@ open http://localhost:3000
 
 ## API Reference
 
+### Authentication
+
+When `API_KEY` is set, all API endpoints (except `/health`) require the `X-API-Key` header:
+
+```bash
+curl -H "X-API-Key: your-secret-key" http://localhost:3000/api/insights
+```
+
 ### Health & Metrics
 ```
-GET /health              - System health check
+GET /health              - System health check (public)
 GET /metrics             - System performance metrics
 ```
 
 ### Insights
 ```
-GET /api/insights?type=daily
-POST /api/insights/daily
+GET  /api/insights?type=daily     - List insights
+POST /api/insights/daily          - Generate daily summary
+POST /api/insights/weekly         - Generate weekly report
 ```
 
 ### Entities
@@ -173,12 +184,14 @@ registry.update('my-connector', newConnector, newMetadata, '1.1.0')
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | 3000 | Server port |
+| `PORT` | `3000` | Server port |
 | `DB_PATH` | `./data/vertexhub.db` | SQLite database path |
+| `NODE_ENV` | `development` | Environment (development, production, test) |
 | `LOG_LEVEL` | `info` | Logging level (debug, info, warn, error) |
-| `CORS_ORIGIN` | `*` | CORS allowed origins |
-| `RATE_LIMIT_WINDOW` | `900000` | Rate limit window (ms) |
-| `RATE_LIMIT_MAX` | `100` | Max requests per window |
+| `CORS_ORIGIN` | `http://localhost:5173` | CORS allowed origins |
+| `RATE_LIMIT_WINDOW_MS` | `60000` | Rate limit window (ms) |
+| `RATE_LIMIT_MAX_REQUESTS` | `100` | Max requests per window |
+| `API_KEY` | _(empty)_ | API key for authentication (optional, empty = no auth) |
 
 ### Connectors
 
@@ -205,6 +218,19 @@ vertexhub/
 │   └── web/            # Dashboard UI
 ├── docker-compose.yml
 └── Dockerfile
+```
+
+### Running the Dashboard (Development)
+
+```bash
+# Start the API server
+cd apps/server && npm run dev
+
+# In another terminal, start the web dashboard
+cd apps/web && npm run dev
+
+# Dashboard at http://localhost:5173
+# API server at http://localhost:3000
 ```
 
 ### Running Tests
@@ -257,8 +283,9 @@ PORT=3000
 DB_PATH=/data/vertexhub.db
 LOG_LEVEL=info
 CORS_ORIGIN=https://yourdomain.com
-RATE_LIMIT_WINDOW=900000
-RATE_LIMIT_MAX=100
+RATE_LIMIT_WINDOW_MS=60000
+RATE_LIMIT_MAX_REQUESTS=100
+API_KEY=your-secret-key
 ```
 
 ## Contributing
@@ -275,7 +302,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ### Connector Development
 
-See [Connector SDK Documentation](packages/sdk/README.md) for creating custom connectors.
+See the [Connector SDK source](packages/sdk/) for creating custom connectors.
 
 ## License
 
@@ -283,9 +310,8 @@ MIT
 
 ## Support
 
-- **Documentation**: [docs/](docs/)
-- **Issues**: [GitHub Issues](https://github.com/your-org/vertexhub/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-org/vertexhub/discussions)
+- **Issues**: [GitHub Issues](https://github.com/larrymou/vertexthub/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/larrymou/vertexthub/discussions)
 
 ---
 
