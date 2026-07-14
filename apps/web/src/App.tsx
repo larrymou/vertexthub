@@ -37,6 +37,61 @@ interface Entity {
   }
 }
 
+// 任务接口
+interface Task {
+  id: string
+  title: string
+  description: string
+  status: 'open' | 'assigned' | 'in_progress' | 'review' | 'revision' | 'done' | 'cancelled'
+  priority: 'low' | 'medium' | 'high' | 'urgent'
+  type: string
+  creator_id: string
+  assignee_id: string | null
+  deadline: string | null
+  tags: string[]
+  contribution_score: number | null
+  created_at: string
+}
+
+// 智能体接口
+interface Agent {
+  id: string
+  name: string
+  type: 'human' | 'ai'
+  credit_score: number
+  skills: string[]
+  tasks_completed: number
+  status: string
+}
+
+// 技能接口
+interface Skill {
+  id: string
+  name: string
+  display_name: string
+  category: string
+}
+
+// 任务统计
+interface TaskStats {
+  total: number
+  by_status: Record<string, number>
+}
+
+// 智能体统计
+interface AgentStats {
+  total: number
+  avg_credit_score: number
+}
+
+// 匹配结果
+interface MatchResult {
+  agent: Agent
+  score: number
+  matched_skills: string[]
+  missing_skills: string[]
+}
+
 function isValidInsight(data: unknown): data is Insight {
   if (!data || typeof data !== 'object') return false
   const obj = data as Record<string, unknown>
@@ -94,7 +149,7 @@ export function App() {
   const [entities, setEntities] = useState<Entity[]>([])
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
-  const [activeTab, setActiveTab] = useState<'report' | 'insights' | 'entities'>('report')
+  const [activeTab, setActiveTab] = useState<'report' | 'insights' | 'entities' | 'tasks' | 'agents' | 'skills'>('report')
   const [error, setError] = useState<string | null>(null)
   const [errorKey, setErrorKey] = useState(0)
 
@@ -223,6 +278,30 @@ export function App() {
           >
             Entities ({entities.length})
           </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === 'tasks'}
+            className={`tab ${activeTab === 'tasks' ? 'active' : ''}`}
+            onClick={() => setActiveTab('tasks')}
+          >
+            Tasks
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === 'agents'}
+            className={`tab ${activeTab === 'agents' ? 'active' : ''}`}
+            onClick={() => setActiveTab('agents')}
+          >
+            Agents
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === 'skills'}
+            className={`tab ${activeTab === 'skills' ? 'active' : ''}`}
+            onClick={() => setActiveTab('skills')}
+          >
+            Skills
+          </button>
         </nav>
 
         <main className="content">
@@ -238,6 +317,15 @@ export function App() {
           </div>
           <div role="tabpanel" hidden={activeTab !== 'entities'}>
             <EntitiesList entities={entities} />
+          </div>
+          <div role="tabpanel" hidden={activeTab !== 'tasks'}>
+            <TasksView />
+          </div>
+          <div role="tabpanel" hidden={activeTab !== 'agents'}>
+            <AgentsView />
+          </div>
+          <div role="tabpanel" hidden={activeTab !== 'skills'}>
+            <SkillsView />
           </div>
         </main>
       </div>
@@ -437,6 +525,373 @@ function EntitiesList({ entities }: { entities: Entity[] }) {
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+// 任务视图组件
+function TasksView() {
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [stats, setStats] = useState<TaskStats | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [filter, setFilter] = useState<string>('all')
+  const [showForm, setShowForm] = useState(false)
+  const [newTask, setNewTask] = useState({ title: '', description: '', priority: 'medium' as Task['priority'], type: '', deadline: '' })
+
+  const fetchTasks = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const [tasksRes, statsRes] = await Promise.all([
+        fetch('/api/tasks'),
+        fetch('/api/tasks/stats'),
+      ])
+      if (tasksRes.ok) {
+        const data = await tasksRes.json()
+        setTasks(data.tasks || [])
+      }
+      if (statsRes.ok) {
+        const data = await statsRes.json()
+        setStats(data)
+      }
+    } catch {
+      setError('Failed to load tasks.')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchTasks() }, [fetchTasks])
+
+  const handleAction = async (taskId: string, action: string) => {
+    try {
+      const res = await fetch(`/api/tasks/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: taskId, user_id: 'current-user' }),
+      })
+      if (res.ok) fetchTasks()
+    } catch {
+      setError(`Failed to ${action} task.`)
+    }
+  }
+
+  const handleCreate = async () => {
+    try {
+      const res = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...newTask, creator_id: 'current-user' }),
+      })
+      if (res.ok) {
+        setShowForm(false)
+        setNewTask({ title: '', description: '', priority: 'medium', type: '', deadline: '' })
+        fetchTasks()
+      }
+    } catch {
+      setError('Failed to create task.')
+    }
+  }
+
+  const filteredTasks = filter === 'all' ? tasks : tasks.filter(t => t.status === filter)
+
+  if (loading) return <div className="loading">Loading tasks...</div>
+
+  return (
+    <div className="tasks-view">
+      {error && <div className="error-banner" role="alert"><p>{error}</p><button className="btn" onClick={() => setError(null)}>Dismiss</button></div>}
+
+      <div className="section-header">
+        <h2>Tasks</h2>
+        <button className="btn btn-refresh" onClick={() => setShowForm(!showForm)}>
+          {showForm ? 'Cancel' : 'New Task'}
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="form-inline">
+          <div className="form-row">
+            <input className="form-input" placeholder="Title" value={newTask.title} onChange={e => setNewTask({ ...newTask, title: e.target.value })} />
+            <select className="form-input" value={newTask.priority} onChange={e => setNewTask({ ...newTask, priority: e.target.value as Task['priority'] })}>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="urgent">Urgent</option>
+            </select>
+          </div>
+          <div className="form-row">
+            <input className="form-input" placeholder="Type" value={newTask.type} onChange={e => setNewTask({ ...newTask, type: e.target.value })} />
+            <input className="form-input" type="date" placeholder="Deadline" value={newTask.deadline} onChange={e => setNewTask({ ...newTask, deadline: e.target.value })} />
+          </div>
+          <div className="form-row">
+            <textarea className="form-input form-textarea" placeholder="Description" value={newTask.description} onChange={e => setNewTask({ ...newTask, description: e.target.value })} />
+          </div>
+          <button className="btn btn-refresh" onClick={handleCreate}>Create Task</button>
+        </div>
+      )}
+
+      <div className="filter-bar" role="group" aria-label="Status filter">
+        {['all', 'open', 'in_progress', 'review', 'done'].map(s => (
+          <button key={s} className={`filter-btn ${filter === s ? 'active' : ''}`} onClick={() => setFilter(s)}>
+            {s === 'all' ? 'All' : s.replace('_', ' ')}
+          </button>
+        ))}
+      </div>
+
+      <div className="list">
+        {filteredTasks.length === 0 ? (
+          <div className="empty">No tasks found.</div>
+        ) : (
+          filteredTasks.map(task => (
+            <div key={task.id} className={`task-card task-status-${task.status}`}>
+              <div className="card-header">
+                <span className="task-title">{task.title}</span>
+                <div className="task-badges">
+                  <span className={`priority-badge priority-${task.priority}`}>{task.priority}</span>
+                  <span className="badge">{task.type}</span>
+                  <span className={`status-badge status-${task.status}`}>{task.status.replace('_', ' ')}</span>
+                </div>
+              </div>
+              <div className="card-body">
+                <p className="task-desc">{task.description}</p>
+                <div className="task-meta">
+                  {task.assignee_id && <span className="meta-item">Assignee: {task.assignee_id}</span>}
+                  {task.deadline && <span className="meta-item">Deadline: {new Date(task.deadline).toLocaleDateString()}</span>}
+                  {task.contribution_score !== null && <span className="meta-item">Score: {task.contribution_score}</span>}
+                </div>
+                {task.tags.length > 0 && (
+                  <div className="task-tags">
+                    {task.tags.map(tag => <span key={tag} className="skill-badge">{tag}</span>)}
+                  </div>
+                )}
+                <div className="action-bar">
+                  {task.status === 'open' && <button className="btn" onClick={() => handleAction(task.id, 'claim')}>Claim</button>}
+                  {task.status === 'assigned' && <button className="btn" onClick={() => handleAction(task.id, 'start')}>Start</button>}
+                  {task.status === 'in_progress' && <button className="btn" onClick={() => handleAction(task.id, 'submit')}>Submit</button>}
+                  {task.status === 'review' && (
+                    <>
+                      <button className="btn" onClick={() => handleAction(task.id, 'approve')}>Approve</button>
+                      <button className="btn" onClick={() => handleAction(task.id, 'reject')}>Reject</button>
+                    </>
+                  )}
+                  {task.status === 'revision' && <button className="btn" onClick={() => handleAction(task.id, 'resubmit')}>Resubmit</button>}
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {stats && (
+        <div className="stats-bar">
+          <span>Total: {stats.total}</span>
+          {Object.entries(stats.by_status).map(([status, count]) => (
+            <span key={status}>{status.replace('_', ' ')}: {count}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// 智能体视图组件
+function AgentsView() {
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [stats, setStats] = useState<AgentStats | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchAgents = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const [agentsRes, statsRes] = await Promise.all([
+          fetch('/api/agents'),
+          fetch('/api/agents/stats'),
+        ])
+        if (agentsRes.ok) {
+          const data = await agentsRes.json()
+          setAgents(data.agents || [])
+        }
+        if (statsRes.ok) {
+          const data = await statsRes.json()
+          setStats(data)
+        }
+      } catch {
+        setError('Failed to load agents.')
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchAgents()
+  }, [])
+
+  if (loading) return <div className="loading">Loading agents...</div>
+
+  return (
+    <div className="agents-view">
+      {error && <div className="error-banner" role="alert"><p>{error}</p><button className="btn" onClick={() => setError(null)}>Dismiss</button></div>}
+
+      <div className="section-header">
+        <h2>Agents</h2>
+      </div>
+
+      <div className="list">
+        {agents.length === 0 ? (
+          <div className="empty">No agents found.</div>
+        ) : (
+          agents.map(agent => (
+            <div key={agent.id} className="agent-card">
+              <div className="card-header">
+                <span className="agent-name">{agent.name}</span>
+                <span className={`badge badge-${agent.type}`}>{agent.type}</span>
+              </div>
+              <div className="card-body">
+                <div className="agent-stats-row">
+                  <span className="meta-item">Credit: {agent.credit_score}</span>
+                  <span className="meta-item">Tasks: {agent.tasks_completed}</span>
+                  <span className={`status-badge status-${agent.status}`}>{agent.status}</span>
+                </div>
+                <div className="credit-bar-container">
+                  <div className="credit-bar" style={{ width: `${Math.min(agent.credit_score, 100)}%` }} />
+                </div>
+                {agent.skills.length > 0 && (
+                  <div className="agent-skills">
+                    {agent.skills.map(skill => <span key={skill} className="skill-badge">{skill}</span>)}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {stats && (
+        <div className="stats-bar">
+          <span>Total Agents: {stats.total}</span>
+          <span>Avg Credit Score: {stats.avg_credit_score.toFixed(1)}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// 技能视图组件
+function SkillsView() {
+  const [skills, setSkills] = useState<Skill[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [categoryFilter, setCategoryFilter] = useState<string>('all')
+  const [matchTaskId, setMatchTaskId] = useState('')
+  const [matchResults, setMatchResults] = useState<MatchResult[]>([])
+  const [matching, setMatching] = useState(false)
+
+  useEffect(() => {
+    const fetchSkills = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await fetch('/api/skills')
+        if (res.ok) {
+          const data = await res.json()
+          setSkills(data.skills || [])
+        }
+      } catch {
+        setError('Failed to load skills.')
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchSkills()
+  }, [])
+
+  const categories = Array.from(new Set(skills.map(s => s.category)))
+  const filteredSkills = categoryFilter === 'all' ? skills : skills.filter(s => s.category === categoryFilter)
+
+  const handleMatch = async () => {
+    if (!matchTaskId) return
+    setMatching(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/skills/match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: matchTaskId }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setMatchResults(data.results || [])
+      }
+    } catch {
+      setError('Failed to match skills.')
+    } finally {
+      setMatching(false)
+    }
+  }
+
+  if (loading) return <div className="loading">Loading skills...</div>
+
+  return (
+    <div className="skills-view">
+      {error && <div className="error-banner" role="alert"><p>{error}</p><button className="btn" onClick={() => setError(null)}>Dismiss</button></div>}
+
+      <div className="section-header">
+        <h2>Skills</h2>
+      </div>
+
+      <div className="filter-bar" role="group" aria-label="Category filter">
+        <button className={`filter-btn ${categoryFilter === 'all' ? 'active' : ''}`} onClick={() => setCategoryFilter('all')}>All</button>
+        {categories.map(cat => (
+          <button key={cat} className={`filter-btn ${categoryFilter === cat ? 'active' : ''}`} onClick={() => setCategoryFilter(cat)}>{cat}</button>
+        ))}
+      </div>
+
+      <div className="list">
+        {filteredSkills.length === 0 ? (
+          <div className="empty">No skills found.</div>
+        ) : (
+          filteredSkills.map(skill => (
+            <div key={skill.id} className="skill-row">
+              <span className="skill-name">{skill.display_name || skill.name}</span>
+              <span className="badge">{skill.category}</span>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="section" style={{ marginTop: 24 }}>
+        <h3>Match Test</h3>
+        <div className="form-inline">
+          <div className="form-row">
+            <input className="form-input" placeholder="Task ID" value={matchTaskId} onChange={e => setMatchTaskId(e.target.value)} />
+            <button className="btn btn-refresh" onClick={handleMatch} disabled={matching}>
+              {matching ? 'Matching...' : 'Find Agents'}
+            </button>
+          </div>
+        </div>
+        {matchResults.length > 0 && (
+          <div className="list" style={{ marginTop: 16 }}>
+            {matchResults.map(result => (
+              <div key={result.agent.id} className="match-result">
+                <div className="match-header">
+                  <span className="agent-name">{result.agent.name}</span>
+                  <span className="match-score">Score: {result.score.toFixed(2)}</span>
+                </div>
+                <div className="match-body">
+                  {result.matched_skills.length > 0 && (
+                    <span className="meta-item">Matched: {result.matched_skills.join(', ')}</span>
+                  )}
+                  {result.missing_skills.length > 0 && (
+                    <span className="meta-item" style={{ color: 'var(--warning)' }}>Missing: {result.missing_skills.join(', ')}</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
