@@ -104,7 +104,7 @@ describe('AgentService', () => {
       expect(result.task.contribution_score).toBe(80)
       expect(result.agent.tasks_completed).toBe(1)
       expect(result.agent.avg_contribution_score).toBe(80)
-      expect(result.agent.credit_score).toBe(8) // 80 / 10
+      expect(result.agent.credit_score).toBe(108) // 100 + 80/10
       expect(result.agent.credit_history).toHaveLength(1)
       expect(result.agent.credit_history[0].delta).toBe(8)
     })
@@ -128,7 +128,7 @@ describe('AgentService', () => {
       // calculateContributionScore returns 50 for on-time medium priority
       expect(result.task.contribution_score).toBe(50)
       expect(result.agent.tasks_completed).toBe(1)
-      expect(result.agent.credit_score).toBe(5) // 50 / 10
+      expect(result.agent.credit_score).toBe(105) // 100 + 50/10
     })
 
     it('uses running average for consecutive approvals', async () => {

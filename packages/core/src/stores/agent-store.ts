@@ -23,7 +23,7 @@ export class SqliteAgentStore implements AgentStore {
         avatar_url TEXT,
         skills TEXT NOT NULL DEFAULT '[]',
         bio TEXT NOT NULL DEFAULT '',
-        credit_score REAL NOT NULL DEFAULT 0,
+        credit_score REAL NOT NULL DEFAULT 100,
         credit_history TEXT NOT NULL DEFAULT '[]',
         status TEXT NOT NULL DEFAULT 'active',
         max_concurrent_tasks INTEGER NOT NULL DEFAULT 3,
@@ -72,7 +72,7 @@ export class SqliteAgentStore implements AgentStore {
         credit_score, credit_history, status, max_concurrent_tasks,
         tasks_completed, tasks_cancelled, avg_contribution_score,
         created_at, updated_at, last_active_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 0, '[]', ?, ?, 0, 0, NULL, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 100, '[]', ?, ?, 0, 0, NULL, ?, ?, ?)
     `)
     stmt.run(
       id,
