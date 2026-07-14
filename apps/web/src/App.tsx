@@ -658,7 +658,7 @@ function TasksView() {
       const res = await fetch(`/api/tasks/${action}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task_id: taskId, user_id: 'current-user' }),
+        body: JSON.stringify({ task_id: taskId, user_id: CURRENT_USER }),
       })
       if (res.ok) fetchTasks()
     } catch {
@@ -671,7 +671,7 @@ function TasksView() {
       const res = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...newTask, creator_id: 'current-user' }),
+        body: JSON.stringify({ ...newTask, creator_id: CURRENT_USER }),
       })
       if (res.ok) {
         setShowForm(false)
