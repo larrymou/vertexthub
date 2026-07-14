@@ -42,3 +42,10 @@ export { generateWeeklyReport } from './ai/weekly-report'
 
 // Demo data seeding
 export { seedDemoData, generateDemoData } from './demo/seed-data'
+
+// Task state machine
+export {
+  TaskStateMachine,
+  calculateContributionScore,
+  type ContributionScoreParams,
+} from './engine/task-state-machine'
